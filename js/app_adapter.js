@@ -1851,6 +1851,12 @@ function adapter_helper_get_saveimg_field(img_name /*String*/) /*AdapterClassIma
 		return new AdapterClassImageReference('');
 	} else if (img_name.startsWith('Spells.')) {
 		return new AdapterClassImageReference('img/page_spells/checks/' + img_name.toLowerCase().match(/\.([a-z0-9]+)$/)[1] + '.svg');
+	} else if (img_name.startsWith('FirstCol.')) {
+		let file_name = img_name.split(".")[1];
+		if (file_name == "hide") {
+			return null;
+		}
+		return new AdapterClassImageReference('img/page_spells/checks/' + file_name + '.svg');
 	}
 	throw "unknown SaveIMG type: " + String(img_name);
 }

@@ -48,6 +48,7 @@ function FindCompRace(inputCreaTxt, aPrefix) {
 	} else {
 		// During startup, do all pages (aPrefix == undefined)
 		var prefixA = What("Template.extras.AScomp").split(",").splice(1);
+		inputCreaTxt = undefined; // make sure this is undefined
 	}
 	for (var p = 0; p < prefixA.length; p++) {
 		var prefix = prefixA[p];
@@ -85,7 +86,7 @@ function FindCompRace(inputCreaTxt, aPrefix) {
 }
 
 //set the CurrentCompRace variable
-function setCurrentCompRace(prefix, type, found) {
+function setCurrentCompRace(prefix, type, found, inputCreaTxt) {
 	if (!prefix || !tDoc.getField(prefix + "Comp.Race")) return;
 	if (!type || !found) {
 		CurrentCompRace[prefix] = {};
@@ -131,7 +132,7 @@ function setCurrentCompRace(prefix, type, found) {
 					// things that should be replaced instead of amended to
 					CurrentCompRace[prefix][prop] = tProp;
 				} else if (isArray(CurrentCompRace[prefix][prop])) {
-					CurrentCompRace[prefix][prop] = CurrentCompRace[prefix][prop].concat(tProp);
+					CurrentCompRace[prefix][prop] = CurrentCompRace[prefix][prop].concat(newObj(tProp));
 				} else if (typeof CurrentCompRace[prefix][prop] === "string" && typeof tProp === "string") {
 					var sCoupler = CurrentCompRace[prefix][prop].indexOf(";") !== -1 ? "; " : ", ";
 					CurrentCompRace[prefix][prop] = CurrentCompRace[prefix][prop].replace(/\.$/, "") + sCoupler + tProp;
@@ -147,12 +148,14 @@ function setCurrentCompRace(prefix, type, found) {
 				oComp.attributesChange(type === "creature" ? CurrentCompRace[prefix].known : false, CurrentCompRace[prefix]);
 			} catch (error) {
 				delete CompanionList[sCompType].attributesChange;
-				var eText = "The `attributesChange` attribute from the '" + sCompType + "' companion produced an error! Please contact the author of the feature to correct this issue and please include this error message:\n " + error;
-				for (var e in error) eText += "\n " + e + ": " + error[e];
-				console.println(eText);
-				console.show();
+				displayError(error, 'The "attributesChange" attribute from the "' + sCompType + '" companion produced the error below. It will be removed for now, but please share this error message with its author so they can correct this issue.');
 			}
 		}
+	}
+	// set the nameThis
+	var creaTxt = inputCreaTxt ? inputCreaTxt : clean(What(prefix + "Comp.Race")).toLowerCase();
+	if (!CurrentCompRace[prefix].nameThis || creaTxt.indexOf(CurrentCompRace[prefix].nameThis.toLowerCase()) === -1) {
+		CurrentCompRace[prefix].nameThis = clean(creaTxt.replace(/,? ?(giant|dire)/ig, '').replace(/ +/g, ' '));
 	}
 }
 
@@ -183,7 +186,7 @@ async function ApplyCompRace(newRace, prefix, sCompType, bIsRaceFld, oldValue) {
 		for (var c = 0; c < clearSubmitNames.length; c++) AddTooltip(clearSubmitNames[c], undefined, "");
 	}
 
-	var undoCreaturePresistents = async function(prefix, objCrea) {
+	var undoCreaturePersists = async function(prefix, objCrea) {
 		// remove special companion type
 		ApplyCompanionType(false, prefix); // also empties Companion.Remember field
 		// undo calcChanges (just calcChanges.hp)
@@ -214,7 +217,7 @@ async function ApplyCompRace(newRace, prefix, sCompType, bIsRaceFld, oldValue) {
 	var oldCrea = CurrentCompRace[prefix];
 	if (newRace === "") {
 		thermoTxt = thermoM("Resetting the companion page...", false); //change the progress dialog text
-		await undoCreaturePresistents(prefix, oldCrea);
+		await undoCreaturePersists(prefix, oldCrea);
 		CurrentCompRace[prefix] = {}; //reset the global variable to nothing
 		thermoM(1/3); //increment the progress dialog's progress
 		tDoc.resetForm(compFields); //reset all the fields
@@ -241,7 +244,7 @@ async function ApplyCompRace(newRace, prefix, sCompType, bIsRaceFld, oldValue) {
 
 	// Undo things from a previous race, if any
 	if (oldCrea) {
-		await undoCreaturePresistents(prefix, oldCrea);
+		await undoCreaturePersists(prefix, oldCrea);
 	}
 
 	// save the companion type
@@ -251,7 +254,7 @@ async function ApplyCompRace(newRace, prefix, sCompType, bIsRaceFld, oldValue) {
 		Value(prefix + "Companion.Remember", CreatureList[fndObj.found].companionApply);
 	}
 	// fill the global variable with the newly found race (and companion type)
-	setCurrentCompRace(prefix, fndObj.type, fndObj.found);
+	setCurrentCompRace(prefix, fndObj.type, fndObj.found, strRaceEntry);
 	var aCrea = CurrentCompRace[prefix];
 	var oComp = CompanionList[aCrea.typeCompanion];
 
@@ -341,19 +344,19 @@ async function ApplyCompRace(newRace, prefix, sCompType, bIsRaceFld, oldValue) {
 		//add a string of the saveText to the features
 		if (aCrea.savetxt) {
 			if (typeof aCrea.savetxt === "string") {
-				var svString = "\u25C6 Saving Throws: " + aCrea.savetxt + ".";
+				var svString = "##\u25C6 Saving Throws##. " + aCrea.savetxt + ".";
 			} else {
 				var svObj = aCrea.savetxt;
 				var svString = "";
 				if (svObj.text) {
-					svString += svString ? "; " : "\u25C6 Saving Throws: ";
+					svString += svString ? "; " : "##\u25C6 Saving Throws##. ";
 					svString += svObj.text.join("; ");
 				};
 				if (svObj.adv_vs) {
-					svString += formatLineList((svString ? "; " : "\u25C6 Saving Throws: ") + "Adv. on saves vs.", svObj.adv_vs);
+					svString += formatLineList((svString ? "; " : "##\u25C6 Saving Throws##. ") + "Adv. on saves vs.", svObj.adv_vs);
 				};
 				if (svObj.immune) {
-					svString += formatLineList((svString ? "; " : "\u25C6 Saving Throws: ") + "Immune to", svObj.immune);
+					svString += formatLineList((svString ? "; " : "##\u25C6 Saving Throws##. ") + "Immune to", svObj.immune);
 				};
 				svString += ".";
 			};
@@ -498,9 +501,9 @@ async function ApplyCompRace(newRace, prefix, sCompType, bIsRaceFld, oldValue) {
 		var sCreaSubtype = aCrea.subtype ? " (" + (isArray(aCrea.subtype) ? await AskUserOptions(aCreaTypeDialogTxt[0].replace("type", "subtype"), aCreaTypeDialogTxt[1].replace(/type/ig, "subtype"), aCrea.subtype, "radio", true) : aCrea.subtype) + ")" : "";
 		Value(prefix + "Comp.Desc.MonsterType", sCreaType + sCreaSubtype);
 
-		//set senses
-		var theSenses = What("Unit System") === "imperial" ? aCrea.senses : ConvertToMetric(aCrea.senses, 0.5);
-		Value(prefix + "Comp.Use.Senses", theSenses);
+		if (aCrea.senses) {//set senses
+			Value(prefix + "Comp.Use.Senses", What("Unit System") === "metric" ? ConvertToMetric(aCrea.senses, 0.5) : aCrea.senses);
+		}
 
 		Value(prefix + "Comp.Desc.Alignment", aCrea.alignment); //set alignment
 		Value(prefix + "Comp.Use.Proficiency Bonus", aCrea.proficiencyBonus); //set proficiency bonus
@@ -586,24 +589,26 @@ async function ApplyCompRace(newRace, prefix, sCompType, bIsRaceFld, oldValue) {
 		thermoM(7/10); //increment the progress dialog's progress
 
 		// >>>> Features section <<<<
-		var strFeatures = "";
+		var strFeatures = [];
 
 		//add special stat block info
 		if (aCrea.damage_vulnerabilities) {
-			strFeatures += "\u25C6 Damage Vulnerabilities: " + aCrea.damage_vulnerabilities + ".";
+			strFeatures.push("##\u25C6 Damage Vulnerabilities##. " + aCrea.damage_vulnerabilities + ".");
 		}
 		if (aCrea.damage_resistances) {
-			strFeatures += "\n\u25C6 Damage Resistances: " + aCrea.damage_resistances + ".";
+			strFeatures.push("##\u25C6 Damage Resistances##. " + aCrea.damage_resistances + ".");
 		}
 		if (aCrea.damage_immunities) {
-			strFeatures += "\n\u25C6 Damage Immunities: " + aCrea.damage_immunities + ".";
+			strFeatures.push("##\u25C6 Damage Immunities##. " + aCrea.damage_immunities + ".");
 		}
 		if (aCrea.condition_immunities) {
-			strFeatures += "\n\u25C6 Condition Immunities: " + aCrea.condition_immunities + ".";
+			strFeatures.push("##\u25C6 Condition Immunities##. " + aCrea.condition_immunities + ".");
 		}
 		if (aCrea.languages) {
-			strFeatures += "\n\u25C6 Languages: " + aCrea.languages + ".";
+			strFeatures.push("##\u25C6 Languages##. " + aCrea.languages + ".");
 		}
+
+		strFeatures = strFeatures.join("\n");
 
 		thermoM(8/10); //increment the progress dialog's progress
 
@@ -714,10 +719,7 @@ async function MakeCompMenu_CompOptions(prefix, MenuSelection, force) {
 						}
 					} catch (error) {
 						delete CompanionList[sComp].includeCheck;
-						var eText = "The `includeCheck` attribute from the '" + sComp + "' companion produced an error! Please contact the author of the feature to correct this issue and please include this error message:\n " + error;
-						for (var e in error) eText += "\n " + e + ": " + error[e];
-						console.println(eText);
-						console.show();
+						displayError(error, 'The "includeCheck" attribute from the "' + sComp + '" companion produced the error below. It will be removed for now, but please share this error message with its author so they can correct this issue.');
 					}
 				}
 			}
@@ -912,9 +914,9 @@ function ApplyCompanionType(bAddRemove, prefix) {
 // Create and add or remove the heading for a CompanionList entry
 function SetCompanionListHeading(bAddRemove, prefix, sCompType, sFld) {
 	var oComp = CompanionList[sCompType];
-	if (!oComp) return "";
+	if (!oComp) return;
 	if (!sFld) sFld = prefix + "Cnote.Left";
-	var sHeading = oComp.name;
+	var sHeading = "**" + oComp.name + "**";
 	var sOrigin = oComp.nameOrigin ? oComp.nameOrigin : "";
 	var sSource = stringSource(oComp, "first,abbr", sOrigin ? ", " : "");
 	if (sSource || sOrigin) sHeading += " (" + sOrigin + sSource + ")";
@@ -934,10 +936,7 @@ async function ApplyCreatureEval(prefix, objEval, arrLvl, sType, sName) {
 		return await objEval[sType](prefix, arrLvl);
 	} catch (error) {
 		var iPageNo = tDoc.getField(prefix + 'Comp.Race').page + 1;
-		var eText = "The " + sType + ' for "' + sName + '" on page ' + iPageNo + " produced an error! Please contact the author of the feature to correct this issue and please include this error message:\n " + error;
-		for (var e in error) eText += "\n " + e + ": " + error[e];
-		console.println(eText);
-		console.show();
+		displayError(error, 'The ' + sType + ' for "' + sName + '" on page ' + iPageNo + ' produced the error below. It will be removed for now, but please share this error message with its author so they can correct this issue.');
 		delete objEval[sType];
 	}
 }
@@ -948,7 +947,7 @@ async function UpdateCompLevelFeatures(prefix, objCrea, useName, newLvl) {
 	if (!objCrea) objCrea = CurrentCompRace[prefix];
 	if (objCrea.typeFound !== "creature") return; // only do this for CreatureList entries
 	var isMetric = What("Unit System") === "metric", arrToEval = [];
-	if (!useName) useName = What(prefix + "Comp.Race").toLowerCase();
+	if (!useName) useName = What(prefix + "Comp.Race");
 	var sCompType = CurrentCompRace[prefix].typeCompanion;
 	var objComp = sCompType ? CompanionList[sCompType] : false;
 	if (!objComp && sCompType) delete CurrentCompRace[prefix].typeCompanion;
@@ -1002,6 +1001,7 @@ async function UpdateCompLevelFeatures(prefix, objCrea, useName, newLvl) {
 	];
 	var arrCompAltStrLocs = [prefix + "Cnote.Left"];
 	if (!typePF) arrCompAltStrLocs.push(prefix + "Cnote.Right");
+	var rxThisAdd = /\[THIS\]/g, rxThisRemove = /\[THIS\][\s\S]*/g;
 	// Now loop through all the features/actions/traits
 	for (var n = 1; n <= 2; n++) {
 		// First do the creature and then the companion direct attribute (probably only `notes`; i.e. not those under `attributesAdd`)
@@ -1025,18 +1025,15 @@ async function UpdateCompLevelFeatures(prefix, objCrea, useName, newLvl) {
 				var addIt = newLvl >= propMinLvl;
 				if (doPropTxt) {
 					// Create the strings for the property
-					var sNameDescrCoupler = prop.joinString !== undefined ? prop.joinString : ": ";
-					var propFirstLine = "\u25C6 " + (isMetric ? ConvertToMetric(prop.name, 0.5) : prop.name);
+					var sNameDescrCoupler = prop.joinString !== undefined ? prop.joinString : ". ";
+					var propFirstLine = "##\u25C6 " + (isMetric ? ConvertToMetric(prop.name, 0.5) : prop.name) + "##";
 					var propFullLine = propFirstLine + sNameDescrCoupler + (isMetric ? ConvertToMetric(prop.description, 0.5) : prop.description);
 					// Apply the name of the creature if [THIS] is present in the strings
-					if (/\[THIS\]/.test(propFullLine)) {
-						if (addIt) {
-							propFirstLine = propFirstLine.replace(/\[THIS\]/g, useName);
-							propFullLine = propFullLine.replace(/\[THIS\]/g, useName);
-						} else {
-							propFirstLine = propFirstLine.replace(/\[THIS\][\s\S]*/, "");
-							propFullLine = propFullLine.replace(/\[THIS\][\s\S]*/, "");
-						}
+					if (rxThisAdd.test(propFullLine)) {
+						var replaceThis = addIt ? rxThisAdd : rxThisRemove;
+						var replaceWith = addIt ? objCrea.nameThis : "";
+						propFirstLine = propFirstLine.replace(replaceThis, replaceWith);
+						propFullLine = propFullLine.replace(replaceThis, replaceWith);
 					}
 				}
 				// See if we need to do this prop
@@ -1091,8 +1088,8 @@ async function UpdateCompLevelFeatures(prefix, objCrea, useName, newLvl) {
 
 // run the CurrentEvals.creatureCallback (sType == "creature") or CurrentEvals.companionCallback functions (sType == "companion") or specific function (fOverride = function) to a specific page (prefix == "prefix") or all companion pages (prefix == "all")
 function RunCreatureCallback(sPrefix, sType, bAdd, fOverride, sOverrideNm) {
-	var sEvalType = (/companion/i).test(sType) ? "companionCallback" : "creatureCallback";
-	var aPrefix = (/all/i).test(sPrefix) ? What("Template.extras.AScomp").split(",").splice(1) : [sPrefix];
+	var sEvalType = /companion/i.test(sType) ? "companionCallback" : "creatureCallback";
+	var aPrefix = /all/i.test(sPrefix) ? What("Template.extras.AScomp").split(",").splice(1) : [sPrefix];
 	if (bAdd === undefined) bAdd = true;
 	var prefix, oCrea, sCompType;
 	var doEval = function(evalThing, evalName) {
@@ -1100,10 +1097,7 @@ function RunCreatureCallback(sPrefix, sType, bAdd, fOverride, sOverrideNm) {
 		try {
 			if (typeof evalThing == 'function') evalThing(prefix, oCrea, bAdd, sCompType);
 		} catch (error) {
-			var eText = "The custom callback function (" + sEvalType + ") from '" + evalName + "' produced an error! It will be removed from the sheet for now, but please contact the author of the feature to have this issue corrected:\n " + error;
-			for (var e in error) eText += "\n " + e + ": " + error[e];
-			console.println(eText);
-			console.show();
+			displayError(error, 'The ' + sEvalType + ' function from "' + evalName + '" produced the error below . It will be removed from the sheet for now, but please share this error message with its author so they can correct this issue.');
 			if (CurrentEvals[sEvalType] && CurrentEvals[sEvalType][evalName]) {
 				delete CurrentEvals[sEvalType][evalName];
 				CurrentEvals[sEvalType + "Order"].splice(i, 1);
@@ -1140,10 +1134,7 @@ async function processAddCompanions(bAddRemove, srcNm, aCreaAdds, fldName) {
 			try {
 				await fCallBack(bAddRemove, prefix);
 			} catch (error) {
-				var eText = 'The callback function of the creaturesAdd attribute from "' + srcNm + '" produced an error while ' + (bAddRemove ? 'adding' : 'removing') + ' the "' + sRace + '" creature! Please contact the author of the feature to correct this issue:\n '  + error;
-				for (var e in error) eText += "\n " + e + ": " + error[e];
-				console.println(eText);
-				console.show();
+				displayError(error, 'The callback function of the "creaturesAdd" attribute from "' + srcNm + '" produced the error below while ' + (bAddRemove ? 'adding' : 'removing') + ' the "' + sRace + '" creature. Please share this error message with its author so they can correct this issue.');
 				fCallBackError = true;
 			}
 		}
@@ -1324,9 +1315,9 @@ function FindCompWeapons(ArrayNmbr, aPrefix) {
 				var compAttack = CurrentCompRace[prefix].attacks[tempArray[j][0]];
 				if (compAttack.abilitytodamage !== undefined) {
 					tempArray[j][2] = compAttack.abilitytodamage;
-				} else if (compAttack.modifiers && compAttack.modifiers[2] !== "") {
+				} else if (compAttack.modifiers && (compAttack.modifiers[2] || compAttack.modifiers[2] === false)) {
 					// --- backwards compatibility --- //
-					tempArray[j][2] = compAttack.modifiers[2];
+					tempArray[j][2] = !!compAttack.modifiers[2];
 				}
 			}
 			//put tempArray in known
@@ -1735,49 +1726,55 @@ async function ApplyWildshape(fldName, value, oldValue) {
 	thermoM(7/10); //increment the progress dialog's progress
 
 	//add traits & features
-	var strTraits = "";
+	var strTraits = [];
 	if (theCrea.wildshapeString !== undefined && typeof theCrea.wildshapeString === "string") {
-		strTraits = theCrea.wildshapeString;
+		strTraits = [theCrea.wildshapeString];
 	} else {
 		//set senses
-		var sensesToAdd = theCrea.senses.replace(/(\; )?Adv\..+(hearing|sight|smell)/i, ""); //avoid duplicating the information with regards to the keen hearing/sight/smell traits
-		if (sensesToAdd) {
-			strTraits += "\u25C6 Senses: " + sensesToAdd; 
+		if (theCrea.senses) {
+			// avoid duplicating the information with regards to the keen hearing/sight/smell traits
+			strTraits.push("##\u25C6 Senses##. " + theCrea.senses.replace(/(\; )?Adv\..+(hearing|sight|smell)/i, "") + ".");
 		}
 		//add resistances & immunities
 		if (theCrea.damage_vulnerabilities) {
-			strTraits += "\n\u25C6 Damage Vulnerabilities: " + theCrea.damage_vulnerabilities + ".";
+			strTraits.push("##\u25C6 Damage Vulnerabilities##. " + theCrea.damage_vulnerabilities + ".");
 		}
 		if (theCrea.damage_resistances) {
-			strTraits += "\n\u25C6 Damage Resistances: " + theCrea.damage_resistances + ".";
+			strTraits.push("##\u25C6 Damage Resistances##. " + theCrea.damage_resistances + ".");
 		}
 		if (theCrea.damage_immunities) {
-			strTraits += "\n\u25C6 Damage Immunities: " + theCrea.damage_immunities + ".";
+			strTraits.push("##\u25C6 Damage Immunities##. " + theCrea.damage_immunities + ".");
 		}
 		if (theCrea.condition_immunities) {
-			strTraits += "\n\u25C6 Condition Immunities: " + theCrea.condition_immunities + ".";
+			strTraits.push("##\u25C6 Condition Immunities##. " + theCrea.condition_immunities + ".");
 		}
 		//add actions
 		if (theCrea.actions) {
 			for (var t = 0; t < theCrea.actions.length; t++) {
-				strTraits += "\n\u25C6 " + theCrea.actions[t].name + (theCrea.actions[t].joinString !== undefined ? theCrea.actions[t].joinString : ": ") + theCrea.actions[t].description;
+				var joinStr = theCrea.actions[t].joinString !== undefined ? theCrea.actions[t].joinString : ". ";
+				strTraits.push("##\u25C6 " + theCrea.actions[t].name + "##" + joinStr + theCrea.actions[t].description);
 			}
 		}
 		//add traits
 		if (theCrea.traits) {
 			for (var t = 0; t < theCrea.traits.length; t++) {
-				strTraits += "\n\u25C6 " + theCrea.traits[t].name + (theCrea.traits[t].joinString !== undefined ? theCrea.traits[t].joinString : ": ") + theCrea.traits[t].description;
+				var joinStr = theCrea.traits[t].joinString !== undefined ? theCrea.traits[t].joinString : ". ";
+				strTraits.push("##\u25C6 " + theCrea.traits[t].name + "##" + joinStr + theCrea.traits[t].description);
 			}
 		}
+
+		strTraits = strTraits.join("\n");
 	}
 
 	thermoM(9/10); //increment the progress dialog's progress
 
-	//convert to metric, if applicable
-	if (strTraits && What("Unit System") === "metric") strTraits = ConvertToMetric(strTraits, 0.5);
 	// add the string to the field
 	if (strTraits) {
-		strTraits = strTraits.replace(/^\n+|^\r+/g, "").replace(/\[THIS\]/g, clean(newForm));
+		if (What("Unit System") === "metric") strTraits = ConvertToMetric(strTraits, 0.5);
+		if (/\[THIS\]/.test(strTraits)) {
+			var nameThis = theCrea.nameThis && newForm.toLowerCase().indexOf(theCrea.nameThis) !== -1 ? theCrea.nameThis: clean(newForm.replace(/,? ?(giant|dire)/ig, '').replace(/ +/g, ' '));
+			strTraits = strTraits.replace(/\[THIS\]/g, nameThis);
+		}
 		AddString(prefix + "Wildshape." + Fld + ".Traits", strTraits, true);
 	}
 
@@ -2310,8 +2307,11 @@ function ChangeFont(newFont, oldFont) {
 	for (var F = 0; F < FldNums; F++) {
 		var Fname = tDoc.getNthFieldName(F);
 		var Fld = tDoc.getField(Fname);
-		if (!(/spells\.|Template\.extras/).test(Fname) && Fld.textFont === oldFont && (Fld.type !== "text" || Fld.richText === false)) {
+		if (!/spells\.|Template\.extras/.test(Fname) && Fld.textFont === oldFont && (Fld.type !== "text" || Fld.richText === false || Fld.mpmbRtFormat)) {
+			// Reset Richt Text support before changing font so it is applied to the content of the field
+			if (Fld.mpmbRtFormat) Fld.richText = false;
 			Fld.textFont = newFont;
+			if (Fld.mpmbRtFormat && Fld.textSize) Fld.richText = true;
 		}
 		thermoM((F+1)/FldNums); //increment the progress dialog's progress
 	}
@@ -2822,13 +2822,7 @@ function deletePage(fldNm, onTemplate, ignoreError) {
 				tDoc.deletePages(tempPage);
 				theReturn = true;
 			} catch (error) {
-				var eText = "Error while deleting page. Please contact MPMB and share the following error text:\n Adobe Acrobat version: " + app.viewerVersion + "\n " + error;
-				for (var e in error) eText += "\n " + e + ": " + error[e];
-				eText += "\n>> ERROR END <<";
-				eText += "\n\nYou are now left with a non-functional page. You can try to remedy this issue by manually executing the code below. To do so, select the line with `tDoc.deletePages(X);` and press CTRL+ENTER.";
-				eText += "\n\ttDoc.deletePages(" + tempPage + ");";
-				console.println(eText);
-				console.show();
+				displayError(error, "ERROR WHILE DELETING PAGE\nPlease share this error message with MorePurpleMoreBetter using one of the contact bookmarks, so that he can address this issue.\nAdobe Acrobat version: " + app.viewerVersion, "You are now left with a non-functional page. You can try to remedy this issue by manually executing the code below. To do so, select the line below that reads `tDoc.deletePages(X);` and press Ctrl+Enter.\n\n\ttDoc.deletePages(" + tempPage + ");");
 			}
 		}
 	}
@@ -4215,10 +4209,7 @@ function SetHPTooltip(resetHP, onlyComp, aPrefix) {
 						}
 					}
 				} catch (error) {
-					var eText = "The custom hit point calculation addition '" + hpEval + "' produced an error! It will be ignored for now, but you will get this warning every time you open the sheet again. Please contact the author of the feature to have this issue corrected:\n " + error;
-					for (var e in error) eText += "\n " + e + ": " + error[e];
-					console.println(eText);
-					console.show();
+					displayError(error, '"The custom hit point calculation addition from "' + hpEval + '" produced the error below. It will be ignored for now, but you will get this warning every time you open the sheet.\nPlease share this error message with its author so they can correct this issue.');
 					if (prefix) {
 						delete CurrentEvals.Comp[prefix].hp[hpEval];
 					} else {
@@ -5012,7 +5003,7 @@ async function MakeSkillsMenu_SkillsOptions(input, onlyTooltips) {
 // returns an object of the different elements to populate the class features or limited features section if olchoice is provided, oldlevel has to be provided as well
 function GetLevelFeatures(aFea, level, choice, oldlevel, oldchoice, ForceChoice) {
 	var tRe = { changed : false };
- 	var attr = [["Add", "additional"], ["Use", "usages"], ["UseCalc", "usagescalc"], ["Recov", "recovery"], ["UseName", "name"], ["UseName", "limfeaname"], ["Descr", "description"], ["source", "source"], ["AltRecov", "altResource"]];
+ 	var attr = [["Add", "additional"], ["Use", "usages"], ["UseCalc", "usagescalc"], ["Recov", "recovery"], ["UseName", "name"], ["UseName", "limfeaname"], ["Descr", "description"], ["Display", "description"], ["source", "source"], ["AltRecov", "altResource"]];
 
 	for (var a = 0; a < attr.length; a++) {
 		// add the new choice
@@ -5023,19 +5014,28 @@ function GetLevelFeatures(aFea, level, choice, oldlevel, oldchoice, ForceChoice)
 		if (objA.indexOf("usages") !== -1) {
 			if (level === 0) tRe[setA] = "";
 			if (oldlevel === 0) tRe[setA + "Old"] = "";
+		} else if (setA === "Display") {
+			if (!tRe[setA] && tRe[setA] !== undefined) tRe[setA] = true;
+			if (!tRe[setA + "Old"] && tRe[setA + "Old"] !== undefined) tRe[setA + "Old"] = true;
 		}
 	}
 
 	for (var aProp in tRe) {
-		if (aProp.indexOf("source") !== -1) continue;
+		if (/changed|source/i.test(aProp)) continue;
 		var theP = tRe[aProp];
 		if (theP && isArray(theP)) {
 			var lvlUse = aProp.indexOf("Old") !== -1 && (oldlevel || oldlevel === 0) ? oldlevel : level;
 			lvlUse = Math.min(lvlUse, theP.length) - 1;
+
+			if (aProp.indexOf("Display") !== -1) {
+				tRe[aProp] = theP[lvlUse] !== undefined ? true : false;
+				continue; // don't affect the changed attribute
+			}
+
 			tRe[aProp] = theP[lvlUse] ? theP[lvlUse] : "";
 
 			// now see if anything changed compared to the new
-			if (!tRe.changed && aProp.indexOf("Old") !== -1) {
+			if (!tRe.changed && aProp.indexOf("Old") !== -1 && aProp.indexOf("Display") === -1) {
 				var otherProp = aProp.replace("Old", "");
 				if (tRe[otherProp] !== "" && !isArray(tRe[otherProp])) {
 					tRe.changed = tRe[aProp].toString() != tRe[otherProp].toString();
@@ -5353,8 +5353,8 @@ function contactMPMB(medium) {
 		case "reddit" :
 			app.launchURL("https://www.reddit.com/r/mpmb/", true);
 			break;
-		case "twitter" :
-			app.launchURL("https://twitter.com/BetterOfPurple", true);
+		case "bluesky" :
+			app.launchURL("https://bsky.app/profile/flapkan.com", true);
 			break;
 	};
 };
@@ -5698,65 +5698,21 @@ function ApplyWeapon(inputText, fldName, isReCalc, onlyProf, forceRedo) {
 			theWea.modifiers && theWea.modifiers[1] ? theWea.modifiers[1] : 0;
 
 		// Select the ability score
-		var StrDex = What(QI ? "Str" : prefix + "Comp.Use.Ability.Str.Score") < What(QI ? "Dex" : prefix + "Comp.Use.Ability.Dex.Score") ? 2 : 1;
+		var StrDex = getHighestAbility(["Str","Dex"], prefix);
 		var weaponMod = /finesse/i.test(theWea.description) ? StrDex : theWea.ability;
 
 		// Change the selected ability to that of a spellcaster, if so defined
-		var useSpellModRem = theWea.useSpellMod && CurrentSpells[theWea.useSpellMod] ? theWea.useSpellMod : undefined;
+		var useSpellModRem = existsInCurrentSpells(theWea.useSpellMod) ? theWea.useSpellMod : undefined;
 		var forceUseSpellcastingMod = theWea.useSpellcastingAbility === undefined ? false : theWea.useSpellcastingAbility ? "y" : "n";
 		var isDC = /dc/i.test(fields.To_Hit_Bonus);
-		var getCasterSpellAbi = function(sCast, iCurrentAbi, iToBeat) {
-			var oCast = CurrentSpells[sCast];
-			if (!oCast) return iToBeat === undefined ? iCurrentAbi : false;
-			if (!oCast.abilityToUse) oCast.abilityToUse = getSpellcastingAbility(sCast);
-			var iCastAbi = oCast.abilityToUse[0];
-			if (iToBeat === undefined) {
-				return iCastAbi;
-			} else {
-				// Get the DC / Spell attack for the caster to compare, unless it hasn't been calculated or this is not a recognized spell, then just get the ability score
-				var iScore = thisWeapon[4].length && oCast.calcSpellScores ? oCast.calcSpellScores[isDC ? "dc" : "attack"] : getAbiModValue(iCastAbi, false, false, true) - 10; // prefer the calculated value, so -10 for scores
-				return iScore > iToBeat ? { ability : iCastAbi, iToBeat : iScore } : false;
-			}
-		}
 		if (useSpellModRem) {
 			// If the weapon has `useSpellMod`, set the ability to the matching spellcaster
-			weaponMod = getCasterSpellAbi(useSpellModRem, weaponMod);
+			weaponMod = getHighestSpellcastingAbility(useSpellModRem, false, isDC).ability;
 		} else if (QI && (thisWeapon[3] || forceUseSpellcastingMod === "y") && forceUseSpellcastingMod !== "n") {
-	// TESTING - new way
 			// Get an array of all the caster classes that can cast the spell (or just all cast classes for non-recognized spells)
 			var aCasters = thisWeapon[4].length ? thisWeapon[4] : Object.keys(CurrentSpells);
-			// Loop through these and get the ability of the caster with the highest bonus
-			var iToBeat = 0;
-			for (var i = 0; i < aCasters.length; i++) {
-				var oTest = getCasterSpellAbi(aCasters[i], weaponMod, iToBeat);
-				if (oTest) {
-					weaponMod = oTest.ability;
-					iToBeat = oTest.iToBeat;
-				}
-			}
-/* TESTING - old way below
-			//change mod if this is concerning a spell/cantrip
-			if (thisWeapon[4].length) {
-				var abiArr = thisWeapon[4].map( function(sCast) {
-					return getCasterSpellAbi(sCast);
-				});
-			} else {
-				// the spell is not known by any class, so just gather the ability scores from all spellcasting entries so we can select the highest
-				var abiArr = [];
-				for (var sCast in CurrentSpells) {
-					abiArr.push(getCasterSpellAbi(sCast));
-				}
-			}
-			var abiDone = [];
-			var abiModArr = [];
-			for (var i = 0; i < abiArr.length; i++) {
-				if (abiDone.indexOf(abiArr[i]) !== -1) continue;
-				abiDone.push(abiArr[i]);
-				var thisMod = !abiArr[i] ? 0 : Number(What(AbilityScores.abbreviations[abiArr[i] - 1]));
-				if (thisMod >= Math.max.apply(Math, abiModArr)) weaponMod = abiArr[i];
-				abiModArr.push(thisMod);
-			}
-*/
+			// Get the highest spellcasting ability from these
+			weaponMod = getHighestSpellcastingAbility(aCasters, false, isDC).ability;
 		}
 		fields.Mod = weaponMod;
 
@@ -5803,19 +5759,16 @@ function ApplyWeapon(inputText, fldName, isReCalc, onlyProf, forceRedo) {
 						evalThing(fields, gatherVars);
 					}
 				} catch (error) {
-					var eText = "The custom ApplyWeapon/atkAdd script '" + evalName + "' produced an error! It will be removed from the sheet for now, but please contact the author of the feature to have this issue corrected:\n " + error;
-					for (var e in error) eText += "\n " + e + ": " + error[e];
-					console.println(eText);
-					console.show();
+					displayError(error, 'The custom calcChanges.atkAdd function from "' + evalName + '" produced the error below. It will be removed from the sheet for now, but please share this error message with its author so they can correct this issue.');
 					delete CurrentEvals.atkAdd[evalName];
 					CurrentEvals.atkAddOrder.splice(i, 1);
 					i--;
 				}
 			}
 
-			// if the `useSpellMod` was changed, change the ability to match unless something already changed the ability to select
-			if (useSpellModRem !== theWea.useSpellMod && CurrentSpells[theWea.useSpellMod] && fields.Mod === weaponMod) {
-				fields.Mod = getCasterSpellAbi(theWea.useSpellMod, fields.Mod);
+			// if the `useSpellMod` was changed, get the associated spellcasting ability unless something already changed the selected ability
+			if (useSpellModRem !== theWea.useSpellMod && existsInCurrentSpells(theWea.useSpellMod) && fields.Mod === weaponMod) {
+				fields.Mod = getHighestSpellcastingAbility(theWea.useSpellMod, false, /dc/i.test(fields.To_Hit_Bonus)).ability;
 			}
 		};
 
@@ -5911,6 +5864,7 @@ function CalcAttackDmgHit(fldName) {
 		Damage_Die : What(fldBaseBT + "Damage Die")
 	};
 
+	var isDC = /dc/i.test(fields.To_Hit_Bonus);
 	var thisWeapon = QI ? CurrentWeapons.known[ArrayNmbr] : CurrentWeapons.compKnown[prefix][ArrayNmbr];
 	var WeaponName = thisWeapon[0];
 	var aWea = QI || isNaN(parseFloat(WeaponName)) ? WeaponsList[WeaponName] : !QI && !isNaN(parseFloat(WeaponName)) && CurrentCompRace[prefix] && CurrentCompRace[prefix].attacks ? CurrentCompRace[prefix].attacks[WeaponName] : false;
@@ -5921,8 +5875,10 @@ function CalcAttackDmgHit(fldName) {
 		for (var attr in WeaponsList[aWea.baseWeapon]) theWea[attr] = WeaponsList[aWea.baseWeapon][attr];
 	}
 	if (aWea) for (var attr in aWea) theWea[attr] = aWea[attr];
-	var oFixedCaster = theWea.useSpellMod && CurrentSpells[theWea.useSpellMod] ? CurrentSpells[theWea.useSpellMod] : false;
-	if (oFixedCaster && !oFixedCaster.abilityToUse) oFixedCaster.abilityToUse = getSpellcastingAbility(theWea.useSpellMod); // make sure this exists
+	var useSpellModRem = existsInCurrentSpells(theWea.useSpellMod) ? theWea.useSpellMod : false;
+	var sFixedCaster = useSpellModRem ? getHighestSpellcastingAbility(useSpellModRem, false, isDC).caster : false;
+	var oFixedCaster = sFixedCaster ? CurrentSpells[sFixedCaster] : false;
+	if (oFixedCaster && !oFixedCaster.abilityToUse) oFixedCaster.abilityToUse = getSpellcastingAbility(sFixedCaster);
 	var aWeaNoAbi = theWea.ability === 0 || (oFixedCaster && (oFixedCaster.fixedDC || oFixedCaster.fixedSpAttack !== undefined) && oFixedCaster.abilityToUse[0] === 0);
 
 	if (!WeaponTextName || (/^(| |empty)$/.test(fields.Mod) && !aWeaNoAbi)) {
@@ -5946,7 +5902,6 @@ function CalcAttackDmgHit(fldName) {
 	};
 
 	// define some variables that we can check against later or with the CurrentEvals
-	var isDC = /dc/i.test(fields.To_Hit_Bonus);
 	var spType = isDC ? "dc" : "attack", spTypeShort = isDC ? "dc" : "atk";
 	var notUseSpellcastingAbility = theWea && theWea.useSpellcastingAbility === false;
 
@@ -5998,24 +5953,25 @@ function CalcAttackDmgHit(fldName) {
 					evalThing(fields, gatherVars, output);
 				}
 			} catch (error) {
-				var eText = "The custom CalcAttackDmgHit/atkCalc script '" + evalName + "' produced an error! It will be removed from the sheet for now, but please contact the author of the feature to have this issue corrected:\n " + error;
-				for (var e in error) eText += "\n " + e + ": " + error[e];
-				console.println(eText);
-				console.show();
+				displayError(error, 'The custom calcChanges.atkCalc function from "' + evalName + '" produced the error below. It will be removed from the sheet for now, but please share this error message with its author so they can correct this issue.');
 				CurrentEvals.atkCalcOrder.splice(i, 1);
 				i--;
 			}
 		}
 
 		// The useSpellMod might've been changed
-		oFixedCaster = theWea.useSpellMod && CurrentSpells[theWea.useSpellMod] ? CurrentSpells[theWea.useSpellMod] : false;
+		if (useSpellModRem !== theWea.useSpellMod) {
+			sFixedCaster = existsInCurrentSpells(theWea.useSpellMod) ? getHighestSpellcastingAbility(theWea.useSpellMod, false, isDC).caster : false;
+			oFixedCaster = sFixedCaster ? CurrentSpells[sFixedCaster] : false;
+			if (oFixedCaster && !oFixedCaster.abilityToUse) oFixedCaster.abilityToUse = getSpellcastingAbility(sFixedCaster);
+		}
 	};
 
 	// If this is a spell (or weapon with useSpellMod), determine which spellcasting bonus to use
 	var aCasters = [], spType = isDC ? "dc" : "attack";
 	if (oFixedCaster) {
 		// Weapon has a fixed affeliated spellcasting class that exists
-		aCasters.push(theWea.useSpellMod);
+		aCasters.push(sFixedCaster);
 		// If this uses a different ability score, fix the field and output to match
 		if (oFixedCaster.abilityToUse[0] !== fields.Mod) {
 			fields.Mod = oFixedCaster.abilityToUse[0];
@@ -6192,7 +6148,7 @@ async function ShowDialog(hdr, strng) {
 	var ShowString_dialog = {
 		initialize : function(dialog) {
 			dialog.load({
-				"Eval" : strng.replace(/^(\r|\n)*/, "")
+				"Eval" : strng.replace(/^[\r\n]*/, "")
 			});
 		},
 		description : {
@@ -6273,34 +6229,75 @@ function FunctionIsNotAvailable() {
 	});
 };
 
-// get the string for the modifier field
-// this can be based on index number Str = 1, Dex = 2, etc.
-// or on the abbreviation string "Str", "Dex", etc.
-// wildshapeNo is the index of the monser on wild shape page, starting with 1
-function getAbiModValue(ability, prefix, wildshapeNo, bReturnScore) {
-	var mod = 0;
-	var abi = !isNaN(ability) && ability > 0 && ability <= AbilityScores.abbreviations.length ?  AbilityScores.abbreviations[ability - 1] : AbilityScores.abbreviations.indexOf(ability) !== -1 ? ability : "error";
-	if (abi === "error") return mod;
-	var suffix = bReturnScore ? (prefix ? ".Score" : "") : (prefix ? ".Mod" : " Mod");
-	if (!prefix) {
-		mod = Number(What(abi + suffix));
-	} else if (wildshapeNo) {
-		mod = Number(What(prefix + "Wildshape." + wildshapeNo + ".Ability." + abi + suffix));
+/** Get the modifier or score for an ability
+ * wildshapeNo is the index of the monser on wild shape page, starting with 1
+ * @param {number|string} ability index number Str = 1, Dex = 2, etc. or abbreviation string "Str", "Dex"
+ * @param {string} [prefix] [optional] the prefix for the companion or wild shape page
+ * @param {number} [wildshapeNo] [optional, requires `prefix`] index of the monster on wild shape page, starting with 1
+ * @param {boolean|string} [returnScore] [optional] can be `true`, `false`, or `"tiebreak"`
+ * 
+ * @returns {number} depends on returnScore: if `=== true` returns the modifier, if `== false` returns the score, if `=== "tiebreak"` returns the modifier with the score as decimals
+ */
+function getAbiModValue(ability, prefix, wildshapeNo, returnScore) {
+	var mod = 0, score = 0, abi;
+	if (AbilityScores.abbreviations.indexOf(ability) !== -1) {
+		abi = ability;
+	} else if (!isNaN(ability) && ability > 0 && ability <= AbilityScores.abbreviations.length) {
+		abi = AbilityScores.abbreviations[ability - 1];
+	} else if (What("HoSRememberState") && (ability === 7 || ability === "HoS")) {
+		abi = "HoS";
 	} else {
-		mod = Number(What(prefix + "Comp.Use.Ability." + abi + suffix));
+		return mod;
 	}
-	return mod;
+	if (!prefix) {
+		mod = Number(What(abi + " Mod"));
+		score = Number(What(abi));
+	} else if (wildshapeNo) {
+		mod = Number(What(prefix + "Wildshape." + wildshapeNo + ".Ability." + abi + ".Mod"));
+		score = Number(What(prefix + "Wildshape." + wildshapeNo + ".Ability." + abi + ".Score"));
+	} else {
+		mod = Number(What(prefix + "Comp.Use.Ability." + abi + ".Mod"));
+		score = Number(What(prefix + "Wildshape." + wildshapeNo + ".Ability." + abi + ".Score"));
+	}
+	if (returnScore === "tiebreak") mod += score / 100;
+	return returnScore === true ? score : mod;
 }
 
-// a way to eval the content of a modifier field; prefix === true if it is the character (true) or a string if it is for a companion page (the prefix of the companion page); if isSpecial === "test" it will output undefined if an error occurs; if isSpecial is a number it will look for that entry on the Wild Shape page with the corresponding prefix variable as a prefix;
+/** Get the highest ability score
+ * Compare ability scores, optionally limited to a subset, and return which one has the highest
+ * If multiple scores are equal, the first one in the provided array will be returned, thus order of the array matters
+ * @param {number[]|string[]} [abilities] [optional] index number Str = 1, Dex = 2, etc. or abbreviation string "Str", "Dex", etc. If omitted, look at all abilities
+ * @param {string} [prefix] [optional] the prefix for the companion or wild shape page
+ * @param {number} [wildshapeNo] [optional, requires `prefix`] index of the monster on wild shape page, starting with 1
+ * @param {boolean} [returnAbbr] [optional] set to `true` if this should return
+ * 
+ * @returns {number} depends on returnAbbr: if `== true` returns abbreviation ("Str", "Dex", etc.), otherwise (default) returns index number (1=Str, 2=Dex, 3=Con, 4=Int, 5=Wis, 6=Cha)
+*/
+function getHighestAbility(abilities, prefix, wildshapeNo, returnAbbr) {
+	var defaultAbilities = AbilityScores.abbreviations.concat('HoS');
+	var oResult = abilities.reduce(function (acc, abi) {
+		var score = getAbiModValue(abi, prefix, wildshapeNo, true);
+		if (!acc.score || score > acc.score) {
+			return { score: score, abi: abi };
+		}
+		return acc;
+	}, {score: 0, abi: 0});
+	if (returnAbbr) {
+		return isNaN(oResult.abi) ? oResult.abi : defaultAbilities[oResult.abi - 1];
+	} else {
+		return !isNaN(oResult.abi) ? oResult.abi : defaultAbilities.indexOf(oResult.abi) + 1;
+	}
+}
+
+// a way to eval the content of a modifier field; (!prefix || prefix === true) if it is the character (true) or a string if it is for a companion page (the prefix of the companion page); if isSpecial === "test" it will output undefined if an error occurs; if isSpecial is a number it will look for that entry on the Wild Shape page with the corresponding prefix variable as a prefix;
 function EvalBonus(input, prefix, isSpecial, useProfB) {
 	if (!input) {
 		return 0;
 	} else if (!isNaN(input)) {
 		return Number(input);
 	};
-	var modStr = prefix === true ? ["", " Mod"] : !isSpecial || isSpecial === "test" ? [prefix + "Comp.Use.Ability.", ".Mod"] : [prefix + "Wildshape." + isSpecial + ".Ability.", ".Mod"];
-	var ProfB = useProfB !== undefined && !isNaN(useProfB) ? useProfB : prefix === true ? Number(How("Proficiency Bonus")) : Number(What(!isSpecial || isSpecial === "test" ? prefix + "Comp.Use.Proficiency Bonus" : prefix + "Wildshape." + isSpecial + ".Proficiency Bonus"));
+	var modStr = !prefix || prefix === true ? ["", " Mod"] : !isSpecial || isSpecial === "test" ? [prefix + "Comp.Use.Ability.", ".Mod"] : [prefix + "Wildshape." + isSpecial + ".Ability.", ".Mod"];
+	var ProfB = useProfB !== undefined && !isNaN(useProfB) ? useProfB : !prefix || prefix === true ? Number(How("Proficiency Bonus")) : Number(What(!isSpecial || isSpecial === "test" ? prefix + "Comp.Use.Proficiency Bonus" : prefix + "Wildshape." + isSpecial + ".Proficiency Bonus"));
 	// remove 'dc' and convert commas to dots for decimal handling
 	input = input.replace(/,/g, ".").replace(/dc/ig, "");
 	// add a "+" between abbreviations that have no operator. Do this twice, so we also catch uneven groups
@@ -6331,7 +6328,7 @@ function EvalBonus(input, prefix, isSpecial, useProfB) {
 	};
 };
 
-// a way to eval the content of a weapon damage die field; prefix if it is the character (true) or if it is for a companion page (the prefix of the companion page); if isSpecial === "test" it will output _ERROR_ for the part that produces an error; if isSpecial is a number it will look for that entry on the Wild Shape page with the corresponding prefix variable as a prefix; useProfB is just here to pass to EvalBonus if present
+// a way to eval the content of a weapon damage die field; (!prefix || prefix === true) if it is the character or if it is for a companion page (the prefix of the companion page); if isSpecial === "test" it will output _ERROR_ for the part that produces an error; if isSpecial is a number it will look for that entry on the Wild Shape page with the corresponding prefix variable as a prefix; useProfB is just here to pass to EvalBonus if present
 function EvalDmgDie(input, prefix, isSpecial, useProfB) {
 	if (!input) {
 		return 0;
@@ -6341,7 +6338,7 @@ function EvalDmgDie(input, prefix, isSpecial, useProfB) {
 	// resolve the C, B, and Q for cantrip die, if present
 	if ((/^(?=.*(B|C|Q))(?=.*d\d).*$/).test(input)) { //if this involves a cantrip calculation
 		// Get the character level, or HD for the companion page (wild shape uses character level)
-		var cLvl = Number(What(prefix === true || (isSpecial && isSpecial !== "test") ? "Character Level" :  prefix + "Comp.Use.HD.Level"));
+		var cLvl = Number(What(!prefix || prefix === true || (isSpecial && isSpecial !== "test") ? "Character Level" :  prefix + "Comp.Use.HD.Level"));
 		var cDie = cantripDie[Math.min(Math.max(cLvl, 1), cantripDie.length) - 1];
 		input = input.replace(/cha/ig, "kha").replace(/con/ig, "kon");
 		input = input.replace(/C/g, cDie).replace(/B/g, cDie - 1).replace(/Q/g, cDie + 1).replace(/0.?d\d+/g, 0);
@@ -6835,7 +6832,7 @@ async function processSkills(AddRemove, srcNm, itemArr, descrTxt) {
 		}
 	}
 	// if we generated a new descriptive text and none was provided, add it now
-	if (setDescr && descrTxt.length) CurrentProfs.skill.descrTxt[srcNm] = formatLineList(false, descrTxt);
+	if (setDescr && descrTxt.length) CurrentProfs.skill.descrTxt[srcNm] = formatLineList(false, descrTxt) + ".";
 	// then update the skill tooltips
 	setSkillTooltips();
 };
@@ -6846,7 +6843,7 @@ function setSkillTooltips(noPopUp) {
 	var iSet = CurrentProfs.skill.descrTxt;
 	var tooltipTxt = "";
 	var tooltipArr = [];
-	for (var aSrc in iSet) tooltipArr.push(toUni(aSrc) + ": " + iSet[aSrc]);
+	for (var aSrc in iSet) tooltipArr.push(toUni(aSrc, "bold") + ": " + iSet[aSrc]);
 	if (tooltipArr.length) {
 		tooltipArr.sort();
 		tooltipTxt = formatMultiList("Skill proficiencies gained from:", tooltipArr);
@@ -7361,7 +7358,7 @@ async function SetProf(ProfType, AddRemove, ProfObj, ProfSrc, Extra) {
 			};
 		};
 		//a functino to parse the 'immune' and 'adv_vs' parts into a usable string
-		var preTxt = {adv_vs : "Adv. on saves vs.", immune : "Immune to"};
+		var preTxt = { adv_vs: "**Adv. vs.**", immune: "**Immunities**." };
 		var parseSvTxt = function() {
 			var sUseName = metric ? "nameMetric" : "name";
 			var oTypes = { adv_vs : [], immune : [] };
@@ -7571,23 +7568,24 @@ async function SetProf(ProfType, AddRemove, ProfObj, ProfSrc, Extra) {
 			return fullString == "both" ? total : fullString ? total[0] : total[1];
 		};
 		// A function to get the totals at the current state
-		var getTotals = function(oDeltaSpds) {
-			if (!oDeltaSpds) oDeltaSpds = {};
+		var getTotals = function(oDeltaSpds, bSetNumberValue) {
+			var fullString = bSetNumberValue ? false : true;
+			var idx = bSetNumberValue ? 1 : 0;
 			var oBaseWalk = { 
-				spd : parseSpeed("walk", set.walk.spd, "both", 0, oDeltaSpds.walkSpd),
-				enc : parseSpeed("walk", set.walk.enc, "both", 0, oDeltaSpds.walkEnc)
+				spd: parseSpeed("walk", set.walk.spd, "both", 0, oDeltaSpds.walkSpd),
+				enc: parseSpeed("walk", set.walk.enc, "both", 0, oDeltaSpds.walkEnc)
 			};
-			var oTotals = { walkSpd : oBaseWalk.spd[0], walkEnc : oBaseWalk.enc[0] };
+			var oTotals = { walkSpd: oBaseWalk.spd[idx], walkEnc: oBaseWalk.enc[idx] };
 			for (var i = 0; i < spdTypes.length; i++) {
 				var sT = spdTypes[i];
 				if (sT === "walk") continue;
-				oTotals[sT + "Spd"] = parseSpeed(sT, set[sT].spd, true, oBaseWalk.spd[2], oDeltaSpds[sT + "Spd"]);
-				oTotals[sT + "Enc"] = parseSpeed(sT, set[sT].enc, true, oBaseWalk.enc[2], oDeltaSpds[sT + "Enc"]);
+				oTotals[sT + "Spd"] = parseSpeed(sT, set[sT].spd, fullString, oBaseWalk.spd[2], oDeltaSpds[sT + "Spd"]);
+				oTotals[sT + "Enc"] = parseSpeed(sT, set[sT].enc, fullString, oBaseWalk.enc[2], oDeltaSpds[sT + "Enc"]);
 			};
 			return oTotals;
 		}
 		// Get the current expected totals before we change anything
-		var oldTotals = getTotals();
+		var oldTotals = getTotals({}, true);
 		// Get the manual changed by comparing the values of the field and the oldTotals
 		var oDeltaSpds = {};
 		var splitSpdString = function(type, str) {
@@ -7857,14 +7855,14 @@ function formatMultiList(caption, elements) {
 	};
 	return rStr;
 };
-function formatLineList(caption, elements, useOr) {
+function formatLineList(caption, elements, useOr, useSemicolon) {
 	if (!elements || (isArray(elements) && elements.length === 0)) return "";
 	if (!isArray(elements)) elements = [elements];
 	var andOr = useOr ? " or " : " and ";
 	var rStr = (caption ? caption + " " : "") + elements[0];
 	var EL = elements.length;
 	for (var i = 1; i < EL; i++) {
-		rStr += EL > 2 ? "," : "";
+		rStr += useSemicolon ? ";" : EL > 2 ? "," : "";
 		rStr += (i === EL - 1 ? andOr : " ") + elements[i];
 	};
 	return rStr;
@@ -7973,6 +7971,27 @@ function getHighestTotal(nmbrObj, notRound, replaceWalk, extraMods, type, withCl
 	}
 };
 
+/** Create a range object to use with getHighestTotal, given a certain base range
+ * This object can than be supplemented with other entries before calculated
+ * using getHighestTotal.
+ * @param {string} range a string with a number and unit (e.g. "20 ft" or "6 m")
+ * 
+ * @returns {object} attribute `base`: a number of the range in feet (e.g. `{ base:20 }`)
+ * @returns {false} if the input wasn't usable
+ */
+function getHighestTotalBaseObject(range) {
+	// First test if this is an actual range that we can use
+	var rangeParts = range.match(/(\d*[,.]?\d+).?(ft|feet|foot|m\b|metre|meter)/i);
+	if (!rangeParts) return false;
+	var rangeFT = Number(rangeParts[1].replace(",", "."));
+	if (rangeParts[2].toLowerCase()[0] === 'm') {
+		// If the range is in metres, convert it to feet
+		rangeFT = RoundTo(rangeFT / UnitsList.metric.length, 0.5);
+	}
+	// Create and return the object
+	return { base: rangeFT };
+}
+
 // open a dialog with a number of lines of choices and return the choices in an array; if knownOpt === "radio", show radio buttons instead, and return the entry selected
 // if notProficiencies is set to true, the optType will serve as the dialog header, and optSrc will serve as the multiline explanatory text
 // bReturnIndex only does something if knownOpt === "radio"; it will return the index of the selection from the input optSubj array
@@ -7984,7 +8003,7 @@ async function AskUserOptions(optType, optSrc, optSubj, knownOpt, notProficienci
 		if (knownOpt === "radio") {
 			selectionLines.push({
 				type : "radio",
-				item_id : "sl" + ("0" + i).slice(-2),
+				item_id : "r" + ("00" + i).slice(-3),
 				group_id : "slct",
 				name : optSubj[i]
 			});
@@ -7996,13 +8015,13 @@ async function AskUserOptions(optType, optSrc, optSubj, knownOpt, notProficienci
 				elements : [{
 					type : "edit_text",
 					alignment : "align_left",
-					item_id : "sl" + ("0" + i).slice(-2),
+					item_id : "r" + ("00" + i).slice(-3),
 					char_width : 30,
 					height : 20
 				}, {
 					type : "static_text",
 					alignment : "align_right",
-					item_id : "st" + ("0" + i).slice(-2),
+					item_id : "t" + ("00" + i).slice(-3),
 					font : "dialog",
 					name : "Already known!"
 				}]
@@ -8074,8 +8093,8 @@ async function AskUserOptions(optType, optSrc, optSubj, knownOpt, notProficienci
 			var toLoad = {};
 			var toShow = {};
 			for (var i = 0; i < this.subj.length; i++) {
-				toLoad["sl" + ("0" + i).slice(-2)] = this.subj[i];
-				var stTxt = "st" + ("0" + i).slice(-2);
+				toLoad["r" + ("00" + i).slice(-3)] = this.subj[i];
+				var stTxt = "t" + ("00" + i).slice(-3);
 				toShow[stTxt] = false;
 				dialog.setForeColorRed(stTxt);
 			};
@@ -8086,7 +8105,7 @@ async function AskUserOptions(optType, optSrc, optSubj, knownOpt, notProficienci
 			var oResult = dialog.store();
 			this.choices = [];
 			for (var i = 0; i < this.subj.length; i++) {
-				var theResult = oResult["sl" + ("0" + i).slice(-2)];
+				var theResult = oResult["r" + ("00" + i).slice(-3)];
 				if (this.already === "radio") {
 					if (theResult) {
 						this.choices = this.subj[i];
@@ -8099,8 +8118,8 @@ async function AskUserOptions(optType, optSrc, optSubj, knownOpt, notProficienci
 		},
 		check : function (dialog, nmbr) {
 			if (!this.already || this.already === "radio") return;
-			var toChk = "sl" + ("0" + nmbr).slice(-2);
-			var tTxt = "st" + ("0" + nmbr).slice(-2);
+			var toChk = "r" + ("00" + nmbr).slice(-3);
+			var tTxt = "t" + ("00" + nmbr).slice(-3);
 			var tResult = dialog.store()[toChk].toLowerCase();
 			var toShow = {};
 			toShow[tTxt] = this.already.indexOf(tResult) !== -1;
@@ -8195,7 +8214,7 @@ async function AskUserOptions(optType, optSrc, optSubj, knownOpt, notProficienci
 		}
 	};
 	if (knownOpt !== "radio") { for (var i = 0; i < optSubj.length; i++) {
-		theDialog["sl" + ("0" + i).slice(-2)] = Function("dialog", "this.check(dialog, " + i + ");");
+		theDialog["r" + ("00" + i).slice(-3)] = Function("dialog", "this.check(dialog, " + i + ");");
 	}; };
 	await app.execDialog(theDialog)
 	if (bReturnIndex && knownOpt === "radio" && typeof theDialog.choices == 'string') {
@@ -8243,14 +8262,18 @@ async function processToNotesPage(AddRemove, items, type, mainObj, parentObj, na
 	if (!isArray(items)) items = [items];
 	// set the alertType, determined by type
 	var fallback = {
-		alertType : "Class Features section",
-		noteOrig : namesArr[1],
-		noteSrc : mainObj.source ? stringSource(mainObj, "first,abbr", ", ") : parentObj && parentObj.source ? stringSource(parentObj, "first,abbr", ", ") : ""
-	}
+		alertType: "Class Features section",
+		noteOrig: namesArr[1],
+		noteSrc: mainObj.source ? stringSource(mainObj, "first,abbr", ", ") : parentObj && parentObj.source ? stringSource(parentObj, "first,abbr", ", ") : "",
+		descrFull: mainObj.descriptionFull ? mainObj.descriptionFull : parentObj.descriptionFull ? parentObj.descriptionFull : false,
+	};
 	switch (GetFeatureType(type)) {
 		case "classes":
 			fallback.alertType = "Class Features section";
-			fallback.noteOrig = namesArr[2].indexOf("subclassfeature") !== -1 ? CurrentClasses[namesArr[3]].subname : CurrentClasses[namesArr[3]].name;
+			var objClass = CurrentClasses[namesArr[3]];
+			fallback.noteOrig = namesArr[2].indexOf("subclassfeature") !== -1 ?
+				(objClass.subnameShort ? objClass.subnameShort : objClass.subname) :
+				(objClass.nameShort ? objClass.nameShort : objClass.name);
 			fallback.noteOrig += mainObj.minlevel ? " " + mainObj.minlevel : parentObj && parentObj.minlevel ? " " + parentObj.minlevel : "";
 			break;
 		case "race":
@@ -8276,14 +8299,30 @@ async function processToNotesPage(AddRemove, items, type, mainObj, parentObj, na
 		var noteObj = items[i];
 		var alertTxt = noteObj.popupName ? noteObj.popupName : noteObj.name + ' from "' + namesArr[0] + '"';
 		var noteSrc = noteObj.source ? stringSource(noteObj, "first,abbr", ", ") : fallback.noteSrc;
-		var noteDesc = (isArray(noteObj.note) ? desc(noteObj.note) : noteObj.note).replace(/\n/g, "\r");
-		if (What("Unit System") === "metric") noteDesc = ConvertToMetric(noteDesc, 0.5);
-		var noteStr = "\u25C6 " + noteObj.name + " (" + fallback.noteOrig + noteSrc + ")" + (noteObj.additional ? " [" + noteObj.additional + "]" : "") + noteDesc;
+		var noteDesc = "";
+		if (noteObj.useDescriptionFull && fallback.descrFull) {
+			noteDesc = ConvertToFirstPerson(
+				formatDescriptionFull(fallback.descrFull, true),
+				noteObj.useDescriptionFull,
+				fallback.noteOrig
+			);
+		} else {
+			noteDesc = isArray(noteObj.note) ? "\r" + formatDescriptionFull(noteObj.note, true) : noteObj.note;
+		}
+		noteDesc = noteDesc.replace(/\n/g, "\r");
+		var noteAdditional = noteObj.additional ? " #[" + noteObj.additional + "]#" : "";
+		if (What("Unit System") === "metric") {
+			noteDesc = ConvertToMetric(noteDesc, 0.5);
+			noteAdditional = ConvertToMetric(noteAdditional, 0.5);
+		}
+		var noteOrig = noteObj.origin != undefined ? noteObj.origin : fallback.noteOrig;
+		var noteStr = "#\u25C6 " + noteObj.name + "# (" + noteOrig + noteSrc + ")" + noteAdditional + noteDesc;
+		if (!noteOrig) noteStr = noteStr.replace("(, ", "(");
 		if (noteObj.page3notes) { // add to 3rd page notes section
 			if (AddRemove) {
 				AddString('Extra.Notes', noteStr, true);
 				show3rdPageNotes(); // for a Colourful sheet, show the notes section on the third page
-				var changeMsg = alertTxt + ' has been added to the Notes section on the third page' + (!typePF ? ", while the Rules section on the third page has been hidden" : "") + ". They wouldn't fit in the " + fallback.alertType + ".";
+				var changeMsg = alertTxt + ' has been added to the Notes section on the third page' + (!typePF ? ", while the Rules section on the third page has been hidden" : "") + ". They either wouldn't be apprioprate for or wouldn't fit in the " + fallback.alertType + ".";
 				CurrentUpdates.types.push("notes");
 				if (!CurrentUpdates.notesChanges) {
 					CurrentUpdates.notesChanges = [changeMsg];
@@ -8512,20 +8551,39 @@ function setCalcOrder() {
 	};
 };
 
+function BuildFaqMenu() {
+	var hasFaqBuiltin = tDoc.dataObjects.some(function (n) { return n.name === 'FAQ.pdf' });
+	Menus.faq = [{
+		cName : hasFaqBuiltin ? "Go to the online FAQ (more up to date)" : "FAQ online",
+		cReturn : "faq#online"
+	}].concat(!hasFaqBuiltin ? [] : {
+		cName : "Open the built-in FAQ.pdf",
+		cReturn : "faq#pdf"
+	}).concat([{
+		cName : "-"
+	}, {
+		cName : "See the license used for distributing WotC material (SRD)",
+		cReturn : "faq#srd"
+	}, {
+		cName : "See the license under which this document is distributed",
+		cReturn : "faq#gplv3"
+	}]);
+	Menus.faqextended = Menus.faq.concat({
+		cName : "-"
+	}, {
+		cName : "Get the latest version",
+		cReturn : "contact#latest version"
+	}, {
+		cName : "-"
+	}, {
+		cName : "Contact MPMB",
+		oSubMenu : Menus.contact
+	});
+};
+
 async function MakeFaqMenu_FaqOptions(MenuSelection) {
 	if (!MenuSelection || MenuSelection === "justMenu") {
-		var arrMenu = Menus.faq.concat({
-			cName : "-"
-		}, {
-			cName : "Get the latest version",
-			cReturn : "contact#latest version"
-		}, {
-			cName : "-"
-		}, {
-			cName : "Contact MPMB",
-			oSubMenu : Menus.contact
-		})
-		Menus.faqextended = arrMenu;
+		BuildFaqMenu();
 		if (MenuSelection == "justMenu") return;
 	}
 	var MenuSelection = MenuSelection ? MenuSelection : getMenu("faqextended");
@@ -8542,6 +8600,7 @@ async function MakeFaqMenu_FaqOptions(MenuSelection) {
 
 // The function called when the FAQ button is pressed
 async function getFAQ(input, delay) {
+	if (!input) BuildFaqMenu();
 	var MenuSelection = input ? input : await getMenu("faq");
 	if (!MenuSelection || MenuSelection[0] != "faq") return;
 	switch (MenuSelection[1]) {
@@ -8553,7 +8612,7 @@ async function getFAQ(input, delay) {
 			tDoc.exportDataObject({ cName: 'FAQ.pdf', nLaunch: 2 });
 			break;
 		case "srd" :
-			await ShowDialog("System Reference Document 5.1 Attribution Statement", licenseSRD);
+			await ShowDialog("System Reference Document 5.2.1 Attribution Statement", licenseSRD);
 			break;
 		case "gplv3" :
 			await ShowDialog("GNU License, for the software by MPMB", licenseGPLV3.join("\n\n"));
@@ -8584,10 +8643,16 @@ async function setUnicodeUse(enable, force) {
 				cTitle : "Unicode has been " + (enable ? "ENABLED" : "DISABLED")
 			});
 		}
+
 		// update the sourcelist superscript
+		var isNewAcrobat = false;
+		try {
+			isNewAcrobat = /hamburger/i.test(app.listMenuItems().toSource());
+		} catch (e) {}
 		for (var aSrc in SourceList) {
-			SourceList[aSrc].uniS = toSup(SourceList[aSrc].abbreviation);
+			SourceList[aSrc].uniS = toSup(SourceList[aSrc].abbreviation, isNewAcrobat);
 		};
+
 		// update the tooltips that use unicode
 		UpdateDropdown("tooltips");
 		await AbilityScores_Button(true);
@@ -8595,5 +8660,6 @@ async function setUnicodeUse(enable, force) {
 		await MakeSkillsMenu_SkillsOptions(true, true);
 		SetHPTooltip();
 		AtHigherLevels = "\n   " + toUni("At Higher Levels") + ": ";
+		PsychicFocus = "\n   " + toUni("Psychic Focus") + ": "
 	}
 }

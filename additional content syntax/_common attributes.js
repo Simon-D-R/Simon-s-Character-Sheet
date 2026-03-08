@@ -49,7 +49,7 @@
 				Magic Item main attributes
 				Magic Item choices
 
-	Sheet:		v13.3.0 and newer
+	Sheet:		v14.0.5 and newer
 */
 "example feature name" = { // you can ignore this, it is just here to make this file valid JavaScript
 
@@ -1096,19 +1096,24 @@ spellcastingBonus : [{
 	/*	name // OPTIONAL //
 		TYPE:	string
 		USE:	set the first column of the spell line on the spell sheet
+		CHANGE:	v14.0.1 (onceXr+markedbox options)
 
 		This can be a string of one or two characters, or one character enclosed in brackets.
 		Anything more than that will be cut off, as it won't fit in the field.
 
 		Alternatively, you can set the first column to be something special:
-		"checkbox"		// an empty checkbox
-		"checkedbox"	// a checked checkbox
-		"markedbox"		// a checked checkbox indicating that this spell is always prepared
-		"atwill"		// the 'At will' graphic
-		"oncesr"		// the 'One time per short rest' graphic (1× SR)
-		"oncelr"		// the 'One time per long rest' graphic (1× LR)
+		"checkbox"			// an empty checkbox
+		"checkedbox"		// a checked checkbox
+		"markedbox"			// a checkbox with a star inside, indicating that this spell is always prepared
+		"atwill"			// the 'At will' graphic
+		"oncesr"			// a checkbox with 'SR' inside (once per short rest usage)
+		"oncelr"			// a checkbox with 'LR' inside (once per short long usage)
+		"oncesr+markedbox"	// two checkboxes, one with 'SR' inside and one with a star inside
+		"oncelr+markedbox"	// two checkboxes, one with 'LR' inside and one with a star inside
 
 		If you don't set anything for the first column the sheet will determine what is most logical.
+		From v14.0.5 onwards, setting "atwill" is ignored when set for a cantrip, instead
+		the sheet will determine what is most logical.
 	*/
 
 	spellcastingAbility : 4,
@@ -1168,11 +1173,13 @@ spellcastingAbility : [4, 5, 6],
 	This attribute will do nothing when included in a class or racial feature.
 	The reason for this is that the class/race sets its spellcasting ability in the parent object (for race that uses this same attribute).
 
-	If for some reason the parent class/race object didn't set the spellcasting ability or you need to change it,
-	you can still set it by including this attribute in one of the spellcastingBonus objects.
-	If you do that, this attribute will overwrite the spellcasting ability score used for the parent object (if any).
-	For example, if you include this in a class feature for a cleric subclass and set it to `1`,
-	the cleric will be casting spells using Strength from then on out.
+	If for some reason the parent class/race object didn't set the spellcasting ability or
+	you need to change it, you can still set it by including this attribute in one of
+	the spellcastingBonus objects.
+	If you do that, this attribute will overwrite the spellcasting ability score used
+	for the parent object (if any).
+	For example, if you include this in a level 5 class feature for a cleric subclass and set it to `1`,
+	the cleric will be casting spells using Strength from level 5 onwards.
 */
 
 fixedDC : 13,
@@ -1184,7 +1191,6 @@ fixedDC : 13,
 	use this value or this value minus 8 for the spell attack.
 	Unless the "fixedSpAttack" is also present, in which case that will be used for spell attacks.
 	This attribute is mostly used by magic items.
-	This attribute has no affect on cantrips/spells in the attack section.
 
 	Setting this to 0 or false is the same as not including this attribute.
 
@@ -1213,7 +1219,6 @@ fixedSpAttack : 5,
 	use this value or this value plus 8 for the spell save DC.
 	Unless the "fixedDC" is also present, in which case that will be used for spell save DC.
 	This attribute is mostly used by magic items.
-	This attribute has no affect on cantrips/spells in the attack section.
 
 	Setting this to 0 or false is the same as not including this attribute.
 
@@ -1358,14 +1363,27 @@ spellFirstColTitle : "Ki",
 /*	spellFirstColTitle // OPTIONAL //
 	TYPE:	string
 	USE:	set the title of the first column of the header on the spell sheet page(s)
+	CHANGE:	v14.0.1 (support for special image options)
 
 	When generating a spell sheet for this attribute's parent object, it will have a header for each column.
 	Setting the 'spellFirstColTitle' will cause the first title of the column titles to be exactly what you enter here.
+
+	Since v14.0.1 this can alternatively be one of the special image options, see
+	`spellcastingBonus.firstCol` above for the options.
 
 	Note that there is only space for 2 characters in the header's first column.
 	One character enclosed in brackets will also fit, for example: "(R)".
 
 	This attribute will do nothing if the parent object does not grant spellcasting in one way or another.
+
+	If you don't include this attribute, the sheet will determine the first column
+	of the title line automatically: "KN" for everything except when
+	creating a spell sheet for a "list" caster like the cleric ("PR" if so), or
+	creating a "full list" for "spellbook" caster like the wizard ("SB" if so), or
+	nothing if the option to only display prepared spells is selected.
+
+	Setting this value to an empty string is useful, as it will remove the first column
+	of the header.
 */
 
 spellChanges : {
@@ -1504,6 +1522,30 @@ spellcastingBonusElsewhere : {
 		Setting this attribute to false is the same as not including this attribute.
 	*/
 },
+
+spellcastingPreparedCantrips : { "class" : ["cleric", "druid"] },
+/*	spellcastingPreparedCantrips // OPTIONAL //
+	TYPE:	object (common spell list object)
+	USE:	show all cantrips on the spell sheet, with checkboxes in the first column
+	ADDED:	v14.0.1
+
+	Setting this attribute causes the spell sheet to show all cantrips that correspond to
+	the given filters (e.g. the example above shows all cleric and druid cantrips).
+	These cantrips then get a checkbox in the first column, and that first column's header
+	is "PR" (for 'prepared'), unless set otherwise with `spellFirstColTitle`.
+	This way, the cantrips can be toggled to be prepared or not, just like spells.
+
+	This object is a "common spell list object". See "_common spell list object.js" for
+	the attributes it supports and how it works.
+
+	This object is used to filter the list of available spells, but is limited to only
+	cantrips. Thus, setting the `level` attribute is useless, as it is effectively
+	always `level: [0, 0]`.
+
+	IMPORTANT: ONLY USE WITH `spellcastingBonus`
+	This attribute is not intended for use with a spellcasting class, as they have their
+	own method of making cantrips display like spells that can be prepared.
+*/
 
 // >>>>>>>>>>>>>>>>>>>>>>>>> //
 // >>> Companion Options >>> //
@@ -2574,24 +2616,107 @@ toNotesPage : [{
 		so that it will read, in this example:
 			Wild Magic Surge Table from "Wild Mage"
 	*/
-	note : "\n   Various strange things can happen whenever I cast a spell.",
+	note : "\nVarious strange things can happen whenever I cast a spell.",
 	note : [
-		"d10  Effect",
-		"01-02 Roll on this table at the start of each of your turns for the next minute, ignoring this result on subsequent rolls.",
-		"03-04 For the next minute, you can see any invisible creature if you have line of sight to it.",
-		"05-06 A modron chosen and controlled by the DM appears in an unoccupied space within 5 ft of you, then disappears 1 minute later.",
-		"07-08 You cast fireball as a 3rd-level spell centered on yourself.",
-		"09-10 You cast magic missile as a 5th-level spell."
+		"Introduction text of the note. This will be preceded by a line break, but not three spaces as this is the first paragraph.",
+		"Second paragraph, which will be preceded by a line break and three spaces.",
+		" \u2022 Bullet point entry. This will be preceded by a line break, but not with three spaces, as this entry starts with a space.",
+		" \u2022 Another bullet point entry.",
+		[ // This will render as a table (i.e. a tab between each column)
+			["Column 1 header", "Column 2 header", "Column 3 header"], // The first row, which will be made bold
+			["Column 1 entry", "Column 2 entry", "Column 3 entry"], // The rest of the rows won't be changed
+			["Column 1 entry II", "Column 2 entry II", "Column 3 entry II"], // Table row 2
+		],
+		"***Header Paragraph***. This paragraph will be preceded by a line break and three spaces. The text 'Header Paragraph' will be made bold and italic because of the three asterisks around it.",
 	],
 	/*	note // REQUIRED //
 		TYPE:	string or array
 		USE:	the text of the feature to add to the notes section
+		CHANGE: v14.0.0 (arrays now formatted using `formatDescriptionFull`)
 
+		STRING
 		The string will be put on the notes section exactly as presented here, after the 'name' attribute.
-		If you are writing this as a string, it is recommended to start with a line break (\r or \n).
+		If you are writing this as a string, it is recommended to start with a line break (`\r` or `\n`).
 
-		If this attribute is an array, it will be joined using the desc() function, meaning that
-		each entry in the array will be on its own line, preceded by three spaces.
+		ARRAY
+		If this attribute is an array, it will be formatted using `formatDescriptionFull`.
+		This means that each entry in the array will be put on a new line.
+		Each entry can be one of the following:
+			1. String
+			   If the entry is a string that doesn't start with a space character and
+			   it is not the first entry, it will be added on a new line proceeded by
+			   three spaces (i.e. `\n   `).
+			   If the entry is a string that starts with a space character,
+			   it will be added on a new line without any preceding spaces.
+			   For example, to make a bullet point list, you would use ` \u2022 list entry`
+			   (N.B. `\u2022` is unicode for a bullet point).
+			2. Array of arrays, which contain only strings
+			   If the entry is in itself an array, it is treated as a table.
+			   Each entry in that array is a row in the table, with the first row being 
+			   considered headers that will be made bold.
+			   Making it bold is done using the `**` formatting character, see below.
+			   Each subarray is rendered with a tab between each column (i.e. `Array.join("\t")`).
+			   If instead of a subarray there is a string, it will be added as is.
+			   The table will be preceded by two line breaks and followed by one line break.
+
+		FORMATTING CHARACTERS (since v14.0.0)
+		Regardless if you use a string or an array, the note can be formatted using the
+		Rich Text formatting characters. Text between the formatting characters will be
+		displayed differently. The formatting characters are as follows:
+			*text*   = italic
+			**text** = bold
+			_text_   = underlined
+			~text~   = strikethrough
+			#text#   = Header 1:
+			           - bold and theme color (Colourful)
+			           - bold and 15% size increase (Printer Friendly)
+			##text## = Header 2:
+			           - italic, bold, and theme color (Colourful)
+			           - italic and bold (Printer Friendly)
+
+		You can combine these to apply multiple formatting options to one string, but there
+		are some limitations to consider.
+			1. Formatting characters don't work across line breaks (`\r` and `\n`).
+				This won't work:
+					"**text before and" + "\n" + "text after line break**"
+				Instead do this:
+					"**text before and**" + "\n" + "**text after line break**"
+			2. Combining formatting characters requires them to be in the same or reversed order.
+				This won't work:
+					"_**~underlined, strikethrough, and bold**_~"
+				Instead do this:
+					"_**~underlined, strikethrough, and bold~**_"
+				or this:
+					"_**~underlined, strikethrough, and bold_**~"
+			3. Tabs (`\t`) and multiple spaces will break the formatting if the field is edited manually.
+				This should be avoided:
+					"**text before and" + "\t" + "text after tab**"
+				Instead do this:
+					"**text before and**" + "\t" + "**text after tab**"
+
+		Be aware that the default font on the Colourful sheets is already italic,
+		so making something only italic won't be visible on the Colourful sheets.
+	*/
+	useDescriptionFull : true,
+	useDescriptionFull : function(str) { return str.replace("if I was I", "if I were you"); },
+	/*	useDescriptionFull // OPTIONAL //
+		TYPE:	boolean or function
+		USE:	whether to use the parent feature's `descriptionFull` as the note
+		ADDED:	v14.0.5
+
+		If this is set to true for a feature that has the `descriptionFull` attribute, 
+		the `note` attribute will be ignored and the `descriptionFull` will be used instead.
+		The sheet will automatically transform the `descriptionFull` from second to first
+		person before adding it to a notes section.
+
+		The sheet's automated transformation to the first person is not perfect. To remedy
+		this, you can have this attribute be a function. If so, the function is passed 1
+		parameter: the string after it has been transformed to the first person.
+		The string returned by this function is then used instead.
+
+		You can also use this function to add/remove/change wording of the `descriptionFull`.
+
+		Setting this to 0 or false is the same as not including this attribute.
 	*/
 	page3notes : true,
 	/*	page3notes // OPTIONAL //
@@ -2658,6 +2783,28 @@ toNotesPage : [{
 
 		This attribute is useless if the `page3notes` attribute is also present and set to `true`.
 	*/
+	origin: "Sorcerer",
+	/*	origin // OPTIONAL //
+		TYPE:	string
+		USE:	the string to use instead of the name (and minlevel) of the parent object
+		ADDED:	v14.0.5
+
+		If this attribute is present, it is used instead of an auto-generated reference
+		to the parent object. The auto-generated reference is then ignored.
+
+		The auto-generated reference is the name of the parent object, such as the name of
+		the class, subclass, species, species feature name, feat, magic item, or background.
+		If that also has a `minlevel`, it is added to the name.
+		For example, for a level 3 class feature for the Wild Magic Sorcery subclass this
+		will result in "Wild Magic Sorcery 3".
+		Another example, for the Cloak of Protection magic item this will result in
+		"Cloak of Protection".
+		Another example, for the Adrenaline Rush feature of the Orc, which has
+		`minlevel: 1`, this will result in "Orc: Adrenaline Rush 1".
+
+		This attribute can be an empty string. If so, no origin is given for the note.
+		Setting this attribute to `false` will result in the origin being written as "false".
+	*/
 }],
 
 
@@ -2686,26 +2833,34 @@ magicitemsAdd : [ "Hat of Disguise", ["Staff of Power", true] ],
 	If a feature with this attribute is removed, these magic items will be removed as well.
 */
 
-featsAdd : [
+featsAdd: [
 	"Grappler",
 	{ key: "lucky" },
-	{ key: "magic initiate", choice: "wizard" }
+	{ key: "magic initiate", choice: "wizard" },
+	{ type: "origin" },
+	{ options: [
+			"Tough",
+			{ key: "shield master" },
+			{ key: "magic initiate", choice: "cleric" },
+		],
+	},
 ],
 /*	featsAdd // OPTIONAL //
 	TYPE:	array (variable length) of strings or objects
 	USE:	adds each entry in the array to one of the feat drop-downs
-	ADDED:	v13.3.0
+	ADDED:	v14.0.0
+	CHANGE: v14.0.1 (added [TYPE 4] and [TYPE 5])
 
 	Each entry in the array is to add a single feat. Each entry must consist of either:
-	1) String with the name of the feat
+	[TYPE 1] String with the name of the feat
 		The string is added to the feat selection, regardless if this matches a feat.
 		The strings will be added exactly as written, capitalisation and all.
 
-	2) Object with `key` attribute
+	[TYPE 2] Object with `key` attribute
 		If the provided `key` attribute is present in the FeatsList, that feat's name
 		will be added, i.e. `FeatsList[key].name`.
 
-	3) Object with `key` and `choice` attributes
+	[TYPE 3] Object with `key` and `choice` attributes
 		This works the same as 2) above, except that the sheet then tries to luck for
 		the `choice` inside the feat (i.e. `FeatsList[key][choice]`).
 
@@ -2716,10 +2871,43 @@ featsAdd : [
 		If that `choice` is not viable, the parent feat's name will be added just like
 		with 2), i.e. `FeatsList[key].name`.
 
+	[TYPE 4] Object with `type` attribute
+		The player will be presented with a pop-up dialog to choose a feat with
+		a matching `type`. This type can be a string or a regular expression.
+
+		FeatsList objects without the `type` attribute will be treates as type "general".
+		Feat types have been introduced in the 2024 (5.5e) rules and are normally not
+		given for 5e (2014) feats.
+
+		In the 2024 rules, common feat types are:
+			"origin"
+			"general"
+			"fighting style"
+			"epic boon"
+			"supernatural gift"
+
+		You can define more types of feats by making a feat with something else set for their
+		`type` attribute. See the "feat (FeatsList).js" file for more details.
+
+		Already known feats, those excluded with the Source Selection dialog, and those with
+		prerequisites that have not been met won't be provided as options.
+
+	[TYPE 5] Object with `options` attribute
+		The player will be presented with a pop-up dialog to choose a feat from the given
+		list of options.
+
+		The options attribute is in itself an array.
+		Each of those entries can be [TYPE 1], [TYPE 2], or [TYPE 3] above.
+
+	The sheet test for the presence of attributes in the same order as presented above.
+	Thus, if an object has both the `key` and the `type` attribute,
+	the `type` attribute will be ignored.
 
 	An entry will only be added if there is space left in the feat section and the feat isn't already present.
 
 	If a feature with this attribute is removed, these feats will be removed as well.
+	If this attribute included an entry in the array with [TYPE 4] or [TYPE 5],
+	the sheet will then try to remove the originally selected feat.
 */
 
 // >>>>>>>>>>>>>>>>>>>>>>> //

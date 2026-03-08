@@ -39,7 +39,7 @@
 				You will also need the syntax for adding a source if you want the feat
 				to have a source that doesn't yet exist in the sheet.
 
-	Sheet:		v13.0.6 and newer
+	Sheet:		v14.0.5 and above
 
 */
 
@@ -57,19 +57,31 @@ var iFileName = "Homebrew Syntax - FeatsList.js";
 	Only the first occurrence of this variable will be used.
 */
 
-RequiredSheetVersion("13.0.6");
+RequiredSheetVersion("14.0.5", "24.0.0");
 /*	RequiredSheetVersion // OPTIONAL //
 	TYPE:	function call with one variable, a string or number
-	USE:	the minimum version of the sheet required for the import script to work
+	USE:	the minimum and maximum versions of the sheet required for the add-on script to work
+	CHANGE: v14.0.5 (added second parameter: upper version limit)
 
-	If this script is imported into a sheet with an earlier version than given here, the player will be given a warning.
+	If this script is imported into a sheet with an lower or higher version than given here,
+	the player will be given a warning.
 
-	The variable you input can be a the full semantic version of the sheet as a string (e.g. "13.0.6" or "13.1.0-beta1+201209").
-	Alternatively, you can input a number, which the sheet will translate to a semantic version.
-	For example:
-		FUNCTION CALL						REQUIRED MINIMUM VERSION
-		`RequiredSheetVersion(13);`			13.0.0
-		`RequiredSheetVersion(13.1);`		13.1.0
+	This function takes two variables, but only the first is required:
+	1. The minimum required version number.
+	   The sheet's version needs to be the same number or higher.
+	   This first parameter is required.
+
+	2. The upper version number limit.
+	   The sheet's version needs to be a lower number.
+	   This second parameter is optional.
+
+	Each variable can be input as a string with the full semantic version (e.g. "14.0.5"
+	or "24.0.4-beta+25011209"), or a number that the sheet will translate to a semantic
+	version. See the examples below for how the sheet does this.
+
+	INPUT NUMBER	SEMANTIC VERSION
+		14  			14.0.0
+		24.1			24.1.0
 
 	You can find the full semantic version of the sheet at the bottom of every page,
 	or look at the "Get Latest Version" bookmark, which lists the version number,
@@ -117,6 +129,33 @@ FeatsList["purple power"] = {
 	If a feat is completely homebrew, or you don't want to make a custom source, just put the following:
 		source : ["HB", 0],
 	"HB" refers to the 'homebrew' source.
+*/
+	type: "supernatural gift",
+/*	type // OPTIONAL //
+	TYPE:	string
+	USE:	define which type of feat this is
+	ADDED:	v14.0.1
+
+	This attribute is used in the 2024 (5.5e) version of the sheet and not needed for the 5e (2014) sheet.
+	It is only used by the `featsAdd` common attribute (see "_common attributes.js").
+
+	If this attribute is not present, it will be considered being set to "general" for the purpose of
+	processing the `featsAdd` common attribute.
+
+	The `featsAdd` attribute can offer the player a choice of feats that have a certain `type`.
+	If the provided `type` in the `featsAdd` attribute is (case-insensitive) included in this
+	`type` attribute string, then the feat will be shown in the options.
+
+	Common feat types are:
+		"origin"
+		"general"
+		"fighting style"
+		"epic boon"
+		"supernatural gift"
+
+	You can also define a custom type, or even a subtype.
+	For example, "origin (dwarf)" would have the feat appear both when `featsAdd.type` is
+	set to `type: "origin"` and `type: "origin (dwarf)"`.
 */
 	defaultExcluded : true,
 /*	defaultExcluded // OPTIONAL //
@@ -204,26 +243,114 @@ FeatsList["purple power"] = {
 /*	description // REQUIRED //
 	TYPE:	string
 	USE:	the text to be filled in the description field of the feat
+	CHANGE: v14.0.0 (formatting characters)
 
 	Note that the sheet normally uses the first person for this.
 	Make sure that this description is not too long and fits in the description field.
-	The Colourful sheets have less space for feat descriptions than the Printer Friendly versions,
-	so use the Colourful sheets to test if the description fits.
+	The Printer Friendly sheets have less space for feat descriptions than the Colourful
+	versions, so use the Printer Friendly sheets to test if the description fits.
+
+	FORMATTING CHARACTERS (since v14.0.0)
+	This can be formatted using the Rich Text formatting characters.
+	Text between the formatting characters will be displayed differently on the sheet.
+	The formatting characters are as follows:
+		*text*   = italic
+		**text** = bold
+		_text_   = underlined [doesn't work in tooltips/pop-ups]
+		~text~   = strikethrough [doesn't work in tooltips/pop-ups]
+		#text#   = Header 1:
+		           - bold and theme color (Colourful)
+		           - bold and 15% size increase (Printer Friendly)
+		##text## = Header 2:
+		           - italic, bold, and theme color (Colourful)
+		           - italic and bold (Printer Friendly)
+
+	You can combine the formatting characters to apply multiple formatting options to one
+	string, but there are some limitations to consider.
+		1. Formatting characters don't work across line breaks (`\r` and `\n`).
+			This won't work:
+				"**text before and" + "\n" + "text after line break**"
+			Instead do this:
+				"**text before and**" + "\n" + "**text after line break**"
+		2. Combining formatting characters requires them to be in the same or reversed order.
+			This won't work:
+				"_**~underlined, strikethrough, and bold**_~"
+			Instead do this:
+				"_**~underlined, strikethrough, and bold~**_"
+			or this:
+				"_**~underlined, strikethrough, and bold_**~"
+		3. Tabs (`\t`) and multiple spaces will break the formatting if the field is edited manually.
+			This should be avoided:
+				"**text before and" + "\t" + "text after tab**"
+			Instead do this:
+				"**text before and**" + "\t" + "**text after tab**"
+
+	Be aware that the default font on the Colourful sheets is already italic,
+	so making something only italic won't be visible on the Colourful sheets.
 */
-	descriptionFull : "You have a swimming speed of 40 feet while wearing this ring.",
+	descriptionFull : "I gain proficiency in any combination of three skills or tools of my choice.",
+	descriptionFull : [
+		"Introduction text of the feat. This will not be preceded by a line break or three spaces as this is the first paragraph.",
+		"Second entry, which will be preceded by a line break and three spaces.",
+		" \u2022 Bullet point entry. This will be preceded by a line break, but not with three spaces, as this entry starts with a space.",
+		" \u2022 Another bullet point entry.",
+		[ // This will render as a table (i.e. a tab between each column)
+			["Column 1 header", "Column 2 header", "Column 3 header"], // The first row, which will be made bold
+			["Column 1 entry", "Column 2 entry", "Column 3 entry"], // The rest of the rows won't be changed
+			["Column 1 entry II", "Column 2 entry II", "Column 3 entry II"], // Table row 2
+		],
+		"***Header Paragraph***. This paragraph will be preceded by a line break and three spaces. The text 'Header Paragraph' will be rendered with unicode as being bold and italic because of the three asterisks around it.",
+	],
 /*	descriptionFull // OPTIONAL //
-	TYPE:	string
+	TYPE:	array or string
 	USE:	description of the feat as it appears in its source
+	CHANGE: v14.0.0 (array option & formatting tags)
 
 	This text is used to populate the tooltip of the feats so that the original description can be read.
 	This description will also be available in a pop-up by using the button in the feat's line.
 	There is no limit to how big this description can be,
 	but very long descriptions will not always display correctly.
+
+	ARRAY (since v14.0.0)
+	This attribute can be an array. Each entry in the array will be put
+	on a new line. Each entry can be one of the following:
+		1. String
+		   If the entry is a string that doesn't start with a space character and
+		   it is not the first entry, it will be added on a new line proceeded by
+		   three spaces (i.e. `\n   `).
+		   If the entry is a string that starts with a space character,
+		   it will be added on a new line without any preceding spaces.
+		   For example, to make a bullet point list, you would use ` \u2022 list entry`
+		   (N.B. `\u2022` is unicode for a bullet point).
+		2. Array of arrays, which contain only strings
+		   If the entry is in itself an array, it is treated as a table.
+		   Each entry in that array is a row in the table, with the first row being the headers.
+		   The headers will be made bold with the `**` formatting character, see below.
+		   Each subarray is rendered with a tab between each column (i.e. `Array.join("\t")`).
+		   If instead of a subarray there is a string, it will be added as is.
+		   The table will be preceded by two line breaks and followed by one line break.
+
+	FORMATTING CHARACTERS (since v14.0.0)
+	Regardless if you use a string or an array, the `descriptionFull` can be formatted
+	using the Rich Text formatting characters, see the `description` attribute above.
+
+	By default, the `descriptionFull` is only used to populate the tooltip and pop-up
+	dialogs, which don't support formatting except through unicode.
+	This means that only the bold and italic formatting will have any effect.
+	Other formatting characters will be ignored (e.g. no underlining or strikethrough).
+	If unicode is disabled, the sheet will instead capitalize everything between any
+	formatting characters (including the `_` and `~` characters).
+
+	The full range of formatting options will only be applicable if the `descriptionFull`
+	is used in a field on the sheet.
+	This can happen if the feat has the `toNotesPage` attribute with
+	`useFullDescription: true`, for example.
 */
 	calculate : "event.value = \"I can spend 10 minutes inspiring up to 6 friendly creatures within 30 feet who can see or hear and can understand me. Each gains lvl (\" + What(\"Character Level\") + \") + Cha mod (\" + What(\"Cha Mod\") + \") temporary hit points. One can't gain temporary hit points from this feat again until after a short rest.\";",
 /*	calculate // OPTIONAL //
 	TYPE:	string
 	USE:	this string is set as the field calculation method for the description field of the feat
+	CHANGE: v14.0.0 (formatting characters)
 
 	The string is evaluated as JavaScript code whenever anything changes on the sheet.
 	To change the value of the field, you will have to set the 'event.value' to something.
@@ -233,6 +360,10 @@ FeatsList["purple power"] = {
 	If this attribute is present, the 'description' attribute will be useless.
 	Remember that the 'description' attribute is still required, so you might just want to set it to an empty string:
 		description : "",
+
+	FORMATTING CHARACTERS (since v14.0.0)
+	The resulting string can be formatted using the Rich Text formatting characters.
+	See the `description` attribute above for an explanation of how they work.
 */
 
 /*

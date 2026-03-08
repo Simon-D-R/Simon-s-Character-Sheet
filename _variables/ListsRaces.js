@@ -118,7 +118,6 @@ var Base_RaceList = {
 			name : "High Elf Cantrip",
 			"class" : "wizard",
 			level : [0, 0],
-			firstCol : 'atwill'
 		}]
 	},
 	"rock gnome" : {
@@ -281,15 +280,11 @@ var Base_RaceList = {
 			name : "Infernal Legacy (level 1)",
 			spells : ["thaumaturgy"],
 			selection : ["thaumaturgy"],
-			firstCol : 'atwill'
 		}],
 		features : {
 			"hellish rebuke" : {
 				name : "Infernal Legacy (level 3)",
-				limfeaname : "Hellish Rebuke (3d10)",
 				minlevel : 3,
-				usages : 1,
-				recovery : "long rest",
 				spellcastingBonus : [{
 					name : "Infernal Legacy (level 3)",
 					spells : ["hellish rebuke"],
@@ -305,10 +300,7 @@ var Base_RaceList = {
 			},
 			"darkness" : {
 				name : "Infernal Legacy (level 5)",
-				limfeaname : "Darkness",
 				minlevel : 5,
-				usages : 1,
-				recovery : "long rest",
 				spellcastingBonus : [{
 					name : "Infernal Legacy (level 5)",
 					spells : ["darkness"],
