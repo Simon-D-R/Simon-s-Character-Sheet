@@ -941,21 +941,22 @@ async function FindClasses(oldClasses, oldPrimary, newClasses, newPrimary, NotAt
 		let classSpellcastingFactor = adapter_helper_get_class_property(aClass, "spellcastingFactor", subclass);
 		if (classSpellcastingFactor) {
 			var casterType = !isNaN(classSpellcastingFactor) ? "default" : classSpellcastingFactor.replace(/\d/g, "");
-			var casterFactor = !isNaN(classSpellcastingFactor) ? Number(classSpellcastingFactor) : (/\d/g).test(classSpellcastingFactor) ? Number(classSpellcastingFactor.match(/\d/g).join("")) : 1;
+			var casterFactor = !isNaN(classSpellcastingFactor) ? Number(classSpellcastingFactor) : /\d/g.test(classSpellcastingFactor) ? Number(classSpellcastingFactor.match(/\d/g).join("")) : 1;
 			// now only continue if the class level is the factor or higher
-			let spellcastingTable = adapter_helper_get_class_property(aClass, "spellcastingTable", subclass);
-			var isCasterAtLvl = function(lvl) {
-				var theRe = Math.max(casterFactor, 1) <= lvl;
+			var isCasterAtLvl = function(lvl, factor, table, roundUp) {
+				var theRe = 0 < Math[roundUp ? "ceil" : "floor"](lvl / factor);
 				// or if the class has its own spell slot progression, check against that
-				if (!theRe && spellcastingTable && spellcastingTable[lvl]) {
-					theRe = 0 < spellcastingTable[lvl].reduce(function (total, num) {
+				if (!theRe && table && table[lvl]) {
+					theRe = 0 < table[lvl].reduce(function (total, num) {
 						return total + num;
 					});
 				}
 				return theRe;
 			}
-			var casterAtCurLvl = isCasterAtLvl(newClasses[aClass].classlevel);
-			var casterAtOldLvl = oldClasses[aClass] ? isCasterAtLvl(oldClasses[aClass].classlevel) : 0;
+			let spellcastingTable = adapter_helper_get_class_property(aClass, "spellcastingTable", subclass);
+			let spellcastingFactorRoundupMulti = adapter_helper_get_class_property(aClass, "spellcastingFactorRoundupMulti", subclass);
+			var casterAtCurLvl = isCasterAtLvl(wasm_character.get_class_level(aClass), casterFactor, spellcastingTable, spellcastingFactorRoundupMulti);
+			var casterAtOldLvl = classes.old[aClass] && isCasterAtLvl(classes.old[aClass].classlevel, casterFactor, spellcastingTable, spellcastingFactorRoundupMulti);
 			if (casterAtCurLvl) {
 				// add one to the casterType for seeing if this casterType is multiclassing later on
 				if (multiCaster[casterType]) {
@@ -974,7 +975,7 @@ async function FindClasses(oldClasses, oldPrimary, newClasses, newPrimary, NotAt
 						cSpells.known = spellcastingKnown ? spellcastingKnown : "";
 						cSpells.typeSp = !cSpells.known || !cSpells.known.spells || isArray(cSpells.known.spells) || !isNaN(cSpells.known.spells) ? "known" : cSpells.known.spells;
 						cSpells.factor = [casterFactor, casterType];
-						cSpells.spellsTable = spellcastingTable ? spellcastingTable : false;
+						cSpells.spellsTable = isArray(spellcastingTable) ? spellcastingTable : false;
 						let spellcastingExtra = adapter_helper_get_class_property(aClass, "spellcastingExtra", subclass);
 						if (spellcastingExtra && deletedCurrentSpells.indexOf(aClass) !== -1) {
 							// Set the extra (and extraSpecial) attributes if we had to recreate this CurrentSpells object
@@ -992,7 +993,9 @@ async function FindClasses(oldClasses, oldPrimary, newClasses, newPrimary, NotAt
 		}
 
 		//add number of attacks to temp array
-		temp.push(Temps.attacks[Math.min(newClasses[aClass].classlevel, Temps.attacks.length) - 1]);
+		if (Temps.attacks && isArray(Temps.attacks)) {
+			temp.push(Temps.attacks[Math.min(newClasses[aClass].classlevel, Temps.attacks.length) - 1]);
+		}
 	}
 	//pick highest number of attacks in temp array and put that into global classes variable
 	classes.attacks = Math.max.apply(Math, temp);
@@ -1005,22 +1008,29 @@ async function FindClasses(oldClasses, oldPrimary, newClasses, newPrimary, NotAt
 		let subclass = newClasses[aClass].subclass ? newClasses[aClass].subclass : null;
 		let spellcastingTable = adapter_helper_get_class_property(aClass, "spellcastingTable", subclass);
 		let spellcastingFactorRoundupMulti = adapter_helper_get_class_property(aClass, "spellcastingFactorRoundupMulti", subclass);
-		// don't go on if this is not a spellcaster or its factor is lower than its level (thus, no spell slots at this level)
-		if (!cSpells || !cSpells.factor || (!spellcastingTable && cSpells.factor[0] > cSpells.level)) continue;
+		// don't go on if this is not a spellcasting class with spell slot progression
+		if (!cSpells || !cSpells.factor) continue;
+		// don't go on if this spellcasting class is not at a level with access to spells
+		var casterLevel = cSpells.level; 
 		var casterFactor = cSpells.factor[0];
 		var casterType = cSpells.factor[1];
+		var customSlotTable = cSpells.spellsTable;
+		var multiRoundUp = spellcastingFactorRoundupMulti;
+		var isCasterAtCurrentLvl = isCasterAtLvl(casterLevel, casterFactor, customSlotTable, multiRoundUp);
+		if (!isCasterAtCurrentLvl) continue;
 		// Now calculate the effective caster level and add it to the casterType
-		if (spellcastingTable && multiCaster[casterType] === 1) {
-			var casterLvl = Math.min(spellcastingTable.length - 1, newClasses[aClass].classlevel);
+		if (customSlotTable && multiCaster[casterType] === 1) {
+			var slotLevel = Math.min(customSlotTable.length - 1, casterLevel);
 			// Sum the values in the row at the current caster level and add it to the otherTables
-			classes.spellcastlvl.otherTables = !classes.spellcastlvl.otherTables ? spellcastingTable[casterLvl] : classes.spellcastlvl.otherTables.map(function (num, idx) {
-				return num + spellcastingTable[casterLvl][idx];
+			classes.spellcastlvl.otherTables = !classes.spellcastlvl.otherTables ? customSlotTable[slotLevel] : classes.spellcastlvl.otherTables.map(function (num, idx) {
+				return num + customSlotTable[slotLevel][idx];
 			});
 		} else {
 			if (classes.spellcastlvl[casterType] == undefined) classes.spellcastlvl[casterType] = 0;
-			classes.spellcastlvl[casterType] += Math[multiCaster[casterType] > 1 && !spellcastingFactorRoundupMulti ? "floor" : "ceil"](cSpells.level / casterFactor);
+			classes.spellcastlvl[casterType] += Math[multiCaster[casterType] > 1 && !multiRoundUp ? "floor" : "ceil"](casterLevel / casterFactor);
 		}
-		if (casterType === "default") classes.spellcastlvl.spellpoints += Math[!spellcastingFactorRoundupMulti ? "floor" : "ceil"](cSpells.level / casterFactor);
+		// Count for spell points optional rule if this is a default caster type
+		if (casterType === "default") classes.spellcastlvl.spellpoints += Math[multiRoundUp ? "ceil" : "floor" ](casterLevel / casterFactor);
 	}
 
 	if (!NotAtStartup) { // add the current classes.known into classes.old on startup of the sheet
@@ -1238,8 +1248,7 @@ function ParseRace(input) {
 				var theR = key + "-" + kObj.variants[i];
 				var rVars = RaceSubList[theR];
 				if (!rVars) {
-					console.println("The racial variant '" + kObj.variants[i] + "' for the '" + kObj.name + "' race missing from the RaceSubList object. Please contact its author to have this issue corrected. The variant will be ignored for now.");
-					console.show();
+					displayError(false, 'The racial variant "' + sVar + '" for the "' + kObj.name + '" race is missing from the RaceSubList object. The variant will be ignored for now, but please contact its author to have this issue corrected.');
 					// Remove this array entry, but make sure we don't skip an entry
 					kObj.variants.splice(i, 1);
 					i--;
@@ -2677,7 +2686,7 @@ function MakeBackgroundMenu() {
 		for (i = 0; i < array.length; i++) {
 			var toUse = isArray(array[i]) ? array[i][1] : array[i];
 			temp.oSubMenu.push({
-				cName : toUse,
+				cName : removeFormatChars(toUse),
 				cReturn : name + "#" + i,
 				bMarked : (RegExp(toUse.RegEscape(), "i")).test(theEntry)
 			})
@@ -2707,7 +2716,9 @@ async function BackgroundOptions() {
 	if (MenuSelection[0] === "personality trait") {
 		AddString("Personality Trait", adapter_helper_get_background_property("trait")[MenuSelection[1]], " ");
 	} else if (MenuSelection[0] === "ideal") {
-		Value("Ideal", adapter_helper_get_background_property("ideal")[MenuSelection[1]][1]);
+		var bckgrndIdeal = adapter_helper_get_background_property("ideal")[MenuSelection[1]];
+		var idealRichText = bckgrndIdeal[1].replace(bckgrndIdeal[0], "**" + bckgrndIdeal[0] + "**");
+		Value("Ideal", idealRichText);
 	} else if (MenuSelection[0] === "bond") {
 		Value("Bond", adapter_helper_get_background_property("bond")[MenuSelection[1]]);
 	} else if (MenuSelection[0] === "flaw") {
@@ -2866,14 +2877,17 @@ function AddString(field, inputstring, newline) {
 	}
 };
 
-function RemoveString(field, toremove, newline) {
+function RemoveString(field, toremove, newline, alreadyRegExp) {
 	if (!toremove && toremove !== 0) return;
 	var thestring = toremove.replace(/\n/g, "\r");
-	var regExString = thestring.RegEscape();
+	var regExString = alreadyRegExp ? thestring : thestring.RegEscape();
 	var thefield = tDoc.getField(field);
 	if (!thefield || !thefield.value) return;
 	var stringsArray, regExStringsArray;
-	if (newline === false || typeof newline === "string") {
+	if (newline === false ) {
+		stringsArray = [thestring];
+		regExStringsArray = [regExString];
+	} else if (typeof newline === "string") {
 		stringsArray = [newline + thestring, thestring];
 		regExStringsArray = [(newline + thestring).RegEscape(), regExString];
 	} else {
@@ -2902,7 +2916,7 @@ function RemoveString(field, toremove, newline) {
 	}
 	for (var i = 0; i < stringsArray.length; i++) {
 		var regex = RegExp(regExStringsArray[i], "i");
-		if ((regex).test(thefield.value)) {
+		if (regex.test(thefield.value)) {
 			thefield.value = thefield.value.replace(regex, "");
 			break;
 		} else if (thefield.value.indexOf(stringsArray[i]) !== -1) {
@@ -3130,7 +3144,7 @@ function CalcMod(name) {
 
 function processRecovery(recovery, additionalRecovery) {
 	var recoveryStr = "";
-	switch (recovery) {
+	switch (recovery.toLowerCase()) {
 		case "long rest":
 			recoveryStr += "LR";
 			break;
@@ -3156,7 +3170,7 @@ function AddFeature(identifier, usages, additionaltxt, recovery, tooltip, Update
 	var additionaltxt = additionaltxt.indexOf(identifier) != -1 ? "" : additionaltxt && What("Unit System") === "metric" ? ConvertToMetric(additionaltxt, 0.5) : additionaltxt;
 	UpdateOrReplace = UpdateOrReplace || UpdateOrReplace === 0 || UpdateOrReplace === "" ? UpdateOrReplace : "replace";
 	var calculation = Calc ? Calc : "";
-	var recovery = (/^(long rest|short rest|dawn)$/).test(recovery) && !additionalRecovery ? recovery : processRecovery(recovery, additionalRecovery);
+	var recovery = (/^(long rest|short rest|dawn)$/i).test(recovery) && !additionalRecovery ? recovery.toLowerCase() : processRecovery(recovery, additionalRecovery);
 	if ((/ ?\bper\b ?/).test(usages)) usages = usages.replace(/ ?\bper\b ?/, "");
 	for (var n = 1; n <= 2; n++) {
 		for (var i = 1; i <= FieldNumbers.limfea; i++) {
@@ -3258,11 +3272,11 @@ function ParseFeat(input) {
 	var isMatch, isMatchSub, tempDate, tempDateSub, tempNameLen;
 	var varArr;
 
-	// Scan string for all magic items
+	// Scan string for all feat
 	for (var key in FeatsList) {
 		var kObj = FeatsList[key];
 
-		// test if the magic item or its source isn't excluded
+		// test if the feat or its source isn't excluded
 		if (testSource(key, kObj, "featsExcl")) continue;
 
 		isMatch = input.indexOf(kObj.name.toLowerCase()) !== -1;
@@ -3277,7 +3291,7 @@ function ParseFeat(input) {
 				var keySub = kObj.choices[i].toLowerCase();
 				var sObj = kObj[keySub];
 				if (!sObj) {
-					console.println("The subchoice '" + kObj.choices[i] + "' for the feat '" + kObj.name + "' doesn't have a corresponding object entry. Please contact its author to have this issue corrected. The choice will be ignored for now.");
+					displayError(false, 'The subchoice "' + kObj.choices[i] + '" for the feat "' + kObj.name + "\" doesn't have a corresponding object entry. Please contact its author to have this issue corrected. The choice will be ignored for now.");
 					console.show();
 					// Remove this array entry, but make sure we don't skip an entry
 					kObj.choices.splice(i, 1);
@@ -3372,10 +3386,7 @@ async function ApplyFeat(input, FldNmbr, field) {
 				try {
 					selectFeatVar = aFeat.selfChoosing();
 				} catch (error) {
-					var eText = "The function in the 'selfChoosing' attribute of '" + newFeat + "' produced an error! Please contact the author of the feat code to correct this issue:\n " + error;
-					for (var e in error) eText += "\n " + e + ": " + error[e];
-					console.println(eText);
-					console.show();
+					displayError(error, 'The "selfChoosing" attribute for the feat "' + aFeat.name + '" produces the error below and is subsequently ignored.\nIf this is one of the built-in feats, please share this error message with MorePurpleMoreBetter using one of the contact bookmarks, so he can fix this bug. Please attach this error message and list the version number of the sheet, name and version of the software you are using, and the name of the buggy feat.\nIf this is not a built-in feat, please share this error message with its author.');
 				}
 				selectFeatVar = selectFeatVar && typeof selectFeatVar == "string" && aFeat[selectFeatVar.toLowerCase()] ? selectFeatVar : false;
 			}
@@ -3403,8 +3414,7 @@ async function ApplyFeat(input, FldNmbr, field) {
 	if (failedChoice) {
 		Value(Fflds[2], 'ERROR, please reapply "' + aFeat.name + '" above.');
 		if (!IsNotImport) {
-			console.println("The feat '" + aFeat.name + "' requires you to make a selection of a sub-choice. However, because this feat was added during importing from another MPMB's Character Record Sheet, no pop-up dialog could be displayed to allow you to make a selection. Please reapply this feat to show the pop-up dialog and make a selection for its sub-choice.");
-			console.show();
+			displayError(false, 'The feat "' + aFeat.name + "\" requires you to make a selection of a sub-choice. However, because this feat was added during importing from another MPMB's Character Record Sheet, no pop-up dialog could be displayed to allow you to make a selection. Please reapply this feat to show the pop-up dialog and make a selection for its sub-choice.");
 		}
 		if (thermoTxt) thermoM(thermoTxt, true); // Stop progress bar
 		field.setVal = "ERROR, please reapply: " + (aFeat.name.substr(0,2) + "\u200A" + aFeat.name.substr(2)).split(" ").join("\u200A ");
@@ -3476,10 +3486,7 @@ async function ApplyFeat(input, FldNmbr, field) {
 				var meetsPrereq = theFeat.prereqeval(gatherVars);
 			}
 		} catch (error) {
-			var eText = "The 'prereqeval' attribute for the feat '" + theFeat.name + "' produces an error and is subsequently ignored. If this is one of the built-in feats, please contact morepurplemorebetter using one of the contact bookmarks to let him know about this bug. Please do not forget to list the version number of the sheet, name and version of the software you are using, and the name of the feat.\nThe sheet reports the error as\n " + error;
-			for (var e in error) eText += "\n " + e + ": " + error[e];
-			console.println(eText);
-			console.show();
+			displayError(error, 'The "prereqeval" attribute for the feat "' + theFeat.name + '" produces the error below and is subsequently ignored.\nIf this is one of the built-in feats, please share this error message with MorePurpleMoreBetter using one of the contact bookmarks, so he can fix this bug. Please attach this error message and list the version number of the sheet, name and version of the software you are using, and the name of the buggy feat.\nIf this is not a built-in feat, please share this error message with its author.');
 			var meetsPrereq = true;
 		};
 		if (!meetsPrereq) {
@@ -3536,18 +3543,18 @@ async function ApplyFeat(input, FldNmbr, field) {
 
 		// Set the field description/calculation
 		if (theFeat.calculate) {
-			var theCalc = What("Unit System") === "imperial" ? theFeat.calculate : ConvertToMetric(theFeat.calculate, 0.5).replace("\n", " ");
+			var theCalc = What("Unit System") === "imperial" ? theFeat.calculate : ConvertToMetric(theFeat.calculate, 0.5);
 			tDoc.getField(Fflds[2]).setAction("Calculate", theCalc);
 		}
 
 		// Create the tooltip
-		var tooltipStr = toUni(theFeat.name);
+		var tooltipStr = toUni(theFeat.name, "bold");
 		if (theFeat.prerequisite) tooltipStr += "\n \u2022 Prerequisite: " + theFeat.prerequisite;
 		tooltipStr += stringSource(theFeat, "full,page", "\n \u2022 Source: ", ".");
-		if (theFeat.descriptionFull) tooltipStr += isArray(theFeat.descriptionFull) ? desc(theFeat.descriptionFull).replace(/^\n   /i, "\n\n") : "\n\n" + theFeat.descriptionFull;
+		if (theFeat.descriptionFull) tooltipStr += "\n\n" + formatDescriptionFull(theFeat.descriptionFull);
 
 		// Get the description
-		var theDesc = !theFeat.description ? "" : What("Unit System") === "imperial" ? theFeat.description : ConvertToMetric(theFeat.description, 0.5).replace("\n", " ");
+		var theDesc = !theFeat.description ? "" : What("Unit System") === "imperial" ? theFeat.description : ConvertToMetric(theFeat.description, 0.5);
 		// Set it all to the appropriate field
 		Value(Fflds[2], theDesc, tooltipStr, theFeat.calculate ? theCalc : "");
 
@@ -3889,9 +3896,120 @@ function FeatClear(itemNmbr, doAutomation) {
 }
 
 // Processing the generic `featsAdd` attribute
-async function processAddFeats(bAddRemove, featsAdd) {
+async function processAddFeats(bAddRemove, featsAdd, srcType, srcName, srcNameUnique) {
 	if (!featsAdd) return;
 	if (!isArray(featsAdd)) featsAdd = [featsAdd];
+
+	srcType = GetFeatureType(srcType);
+
+	var gatherVars = gatherPrereqevalVars();
+	var skipFeat = function(key, choice) {
+		var oFeat = FeatsList[key];
+		var oChoice = oFeat[choice];
+		var knownIndex = CurrentFeats.known.indexOf(key);
+		if (!oFeat || testSource(key, oFeat, "featsExcl") || (knownIndex !== -1 && !oFeat.allowDuplicates)) return true;
+		var prereqFunc = oFeat.prereqeval;
+		if (oFeat.choices && oChoice && typeof oChoice === "object") {
+			if (knownIndex !== -1 && CurrentFeats.choices[knownIndex] === choice) return true;
+			if (oChoice.source && testSource(key + "-" + choice, oChoice, "featsExcl")) return true;
+			if (oChoice.prereqeval) prereqFunc = oChoice.prereqeval;
+		}
+		if (prereqFunc) {
+			var meetsPrereq = true;
+			gatherVars.choice = choice;
+			try {
+				if (typeof prereqFunc == 'string') {
+					meetsPrereq = eval(prereqFunc);
+				} else if (typeof prereqFunc == 'function') {
+					meetsPrereq = prereqFunc(gatherVars);
+				}
+			} catch (error) {}
+			if (!meetsPrereq) return true;
+		}
+		return false;
+	}
+
+	var getFeatArrayFromType = function(sFeatType) {
+		var returnObj = {
+			options: [],
+			optionsRef: [],
+		};
+		if (sFeatType instanceof RegExp == true) {
+			var rxFeatType = sFeatType;
+			returnObj.title = "Select " + srcName.capitalize() + " Bonus Feat";
+			returnObj.message = srcName + " offers you a bonus feat.";
+		} else {
+			var rxFeatType = RegExp(sFeatType.RegEscape(), "i");
+			returnObj.title = "Select " + sFeatType.capitalize() + " Feat";
+			returnObj.message = srcName + " offers you a choice of " + sFeatType.toLowerCase() + " feat.";
+		}
+		var rxFeatType = sFeatType instanceof RegExp == true ? sFeatType : RegExp(sFeatType.RegEscape(), "i");
+		for (var key in FeatsList) {
+			var oFeat = FeatsList[key];
+			var sType = oFeat.type ? oFeat.type : "general";
+			if (rxFeatType.test(sType) && !skipFeat(key)) {
+				var sFeatDisplay = oFeat.name + stringSource(oFeat, "first", " [", "]");
+				returnObj.options.push(sFeatDisplay);
+				returnObj.optionsRef[sFeatDisplay] = oFeat.name;
+			}
+		}
+		return returnObj;
+	}
+
+	var getFeatArrayFromOptions = function(aFeatOptions, noCheck) {
+		if (!isArray(aFeatOptions)) return { options: [] };
+		var returnObj = {
+			title: "Select " + srcName.capitalize() + " Bonus Feat",
+			message: srcName + " offers you a bonus feat.",
+			options: [],
+			optionsRef: {},
+		};
+		aFeatOptions.forEach(function(entry) {
+			var sFeatName = false;
+			var oFeatSource = false;
+			if (typeof entry === "string") {
+				sFeatName = entry;
+				sourceAttr = ParseFeat(entry)
+			} else if (entry.name || entry.select) {
+				sFeatName = entry.name ? entry.name : entry.select;
+			} else if (entry.key && (noCheck || !skipFeat(entry.key, entry.choice))) {
+				var oFeat = FeatsList[entry.key];
+				var oChoice = oFeat[entry.choice];
+				sFeatName = oFeat.name;
+				var oFeatSource = oFeat;
+				if (oFeat.choices && oChoice && typeof oChoice === "object") {
+					var sChoice = oFeat.choices.filter(function (n) { return n.toLowerCase() === entry.choice; });
+					if (sChoice.length) {
+						sFeatName = oChoice.name ? oChoice.name : sFeatName + " [" + sChoice.toString() + "]";
+						if (oChoice.source) oFeatSource = oChoice;
+					}
+				}
+			}
+			if (sFeatName) {
+				if (!oFeatSource) {
+					var parsedFeat = ParseFeat(sFeatName);
+					var oFeat = FeatsList[parsedFeat[0]];
+					var oChoice = oFeat[parsedFeat[1]];
+					oFeatSource = oChoice && oChoice.source ? oChoice : oFeat;
+				}
+				var sFeatDisplay = sFeatName + stringSource(oFeatSource, "first", " [", "]");
+				returnObj.options.push(sFeatDisplay);
+				returnObj.optionsRef[sFeatDisplay] = sFeatName;
+			}
+		});
+		return returnObj;
+	}
+
+	var askUserFeat = function(dialogParts) {
+		if (dialogParts.options.length === 1) {
+			return dialogParts.optionsRef[dialogParts.options[0]];
+		} else if (dialogParts.options.length) {
+			dialogParts.options.sort();
+			return dialogParts.optionsRef[AskUserOptions(dialogParts.title, dialogParts.message + " Pick one of the options below. This list excludes feats that are already known and feats for which the prerequisites have not been met.", dialogParts.options, "radio", true, 'You can change what you select here by changing the feat selection in the corresponding section of the sheet.\nIf you do so, be aware that the newly selected feat will not automatically be removed when you remove ' + srcName + '.')];
+		} else {
+			return false;
+		}
+	}
 
 	var sFeatName;
 	// loop through all the entries
@@ -3903,23 +4021,32 @@ async function processAddFeats(bAddRemove, featsAdd) {
 			sFeatName = featsAdd[i];
 		} else if (featsAdd[i].name || featsAdd[i].select) {
 			sFeatName = featsAdd[i].name ? featsAdd[i].name : featsAdd[i].select;
-		} else if (featsAdd[i].key && FeatsList[featsAdd[i].key]) {
-			var oFeat = FeatsList[featsAdd[i].key];
-			sFeatName = oFeat.name;
-			if (featsAdd[i].choice && oFeat.choices && oFeat[featsAdd[i].choice]) {
-				var sChoice = oFeat.choices.filter(function (n) { return n.toLowerCase() === featsAdd[i].choice; });
-				var oChoice = oFeat[featsAdd[i].choice];
-				if (typeof oChoice === "object" && sChoice.length) {
-					sFeatsName = oChoice.name ? oChoice.name : sFeatName + " [" + sChoice.toString() + "]";
-				}
+		} else if (featsAdd[i].key) {
+			var aFeat = getFeatArrayFromOptions([featsAdd[i]], !bAddRemove);
+			if (aFeat.options.length) sFeatName = aFeat.optionsRef[aFeat.options[0]];
+		} else if (featsAdd[i].type || featsAdd[i].options) {
+			// Add a type of feat
+			var sSaveName = srcNameUnique ? srcNameUnique : srcName;
+			var sSaveFeature = "featsAdd_"+i;
+			if (bAddRemove) {
+				var dialogParts = featsAdd[i].type ? getFeatArrayFromType(featsAdd[i].type) : getFeatArrayFromOptions(featsAdd[i].options);
+				// Adding a feat, so let the user pick which feat of the matching type
+				sFeatName = askUserFeat(dialogParts);
+				// Store the selection if anything was chosen
+				if (sFeatName) SetFeatureChoice(srcType, sSaveName, sSaveFeature, sFeatName);
+			} else {
+				// Removing a feat, so use the stored selection
+				sFeatName = GetFeatureChoice(srcType, sSaveName, sSaveFeature);
+				// Remove the saved choice
+				SetFeatureChoice(srcType, sSaveName, sSaveFeature, false);
 			}
 		}
 		// If a feat name was detected, add or remove it
-		if (sFeatname) {
+		if (sFeatName) {
 			if (bAddRemove) {
 				await AddFeat(sFeatname);
 			} else {
-				RemoveFeat(sFeatname);
+				RemoveFeat(sFeatName);
 			}
 		}
 	}
@@ -3927,8 +4054,7 @@ async function processAddFeats(bAddRemove, featsAdd) {
 
 //this is now an empty function so that legacy code doesn't produce an error
 function ChangeSpeed(input) {
-	console.println("ChangeSpeed(" + input + ") was called, but this function is no longer supported since v12.998 of the sheet. Instead, a new, more comprehensive syntax for setting speed is available from v12.998 onwards.");
-	console.show();
+	displayError(false, "ChangeSpeed(" + input + ") was called, but this function is no longer supported since v12.998 of the sheet. Instead, a new, more comprehensive syntax for setting speed is available from v12.998 onwards.");
 };
 
 // Reset the limited feature uses, buttons on the 1st page
@@ -4067,63 +4193,81 @@ function CalcEncumbrance(FldName) {
 
 function ParseClassFeature(theClass, theFeature, FeaLvl, ForceOld, SubChoice, Fea, ForceFeaOld, subClass) {
 	// First make sure we know where the feature comes from (if it exists in both class and subclass, use subclass, unless ForceOld is true)
-	var aSubClass = subClass ? subClass : wasm_character.get_subclass(theClass);
-	var FeaList = ClassList[theClass].features[theFeature] && (ForceOld || !aSubClass || !ClassSubList[aSubClass].features[theFeature]) ? 'ClassList' : ClassSubList[aSubClass].features[theFeature] ? 'ClassSubList' : false;
-	if (!FeaList) return ["", ""];
+	var sSubclass = subClass ? subClass : wasm_character.get_subclass(theClass) ? wasm_character.get_subclass(theClass): false;
+	var isSubclassFeature = !ForceOld && sSubclass && ClassSubList[sSubclass].features[theFeature] && (!ClassList[theClass].features[theFeature] || /^subclassfeature\d+\.?\d*$/.test(theFeature));
+	var oClFea = isSubclassFeature ? ClassSubList[sSubclass].features[theFeature] : ClassList[theClass].features[theFeature];
+	if (!oClFea) return ["", "", ""];
 
-	var FeaKey = FeaList == 'ClassList' ? ClassList[theClass].features[theFeature] : ClassSubList[aSubClass].features[theFeature];
 	var old = (ForceOld || ForceFeaOld) && Fea ? "Old" : "";
 	if (old) Fea.source = Fea.sourceOld;
-	var FeaClass = FeaList == 'ClassSubList' && adapter_helper_get_class_property(theClass, "subname") ? adapter_helper_get_class_property(theClass, "subname") : adapter_helper_get_class_property(theClass, "name");
-	if (!Fea) Fea = GetLevelFeatures(FeaKey, FeaLvl, SubChoice, "", "");
 
-	if (!Fea.UseName) return ["", ""]; // return empty strings if there is no name
+	if (!Fea) Fea = GetLevelFeatures(oClFea, FeaLvl, SubChoice, "", "");
+	if (!Fea.UseName) return ["", "", ""]; // return empty strings if there is no name
 
-	var FeaSource = stringSource(Fea, "first,abbr", ", ");
-	var FeaRef = " (" + FeaClass + " " + FeaKey.minlevel + FeaSource + ")";
-	var FeaUse = Fea["Use" + old] + (Fea["Use" + old] && !isNaN(Fea["Use" + old]) ? "\xD7 per " : "") + Fea["Recov" + old] + (Fea["AltRecov" + old] ? " or " + Fea["AltRecov" + old] : "");
+	var className = isSubclassFeature ?
+		(ClassSubList[sSubclass].subnameShort ? ClassSubList[sSubclass].subnameShort : ClassSubList[sSubclass].subname) :
+		(ClassList[theClass].nameShort ? ClassList[theClass].nameShort : ClassList[theClass].name);
+	var FeaRef = " (" + className + " " + oClFea.minlevel + stringSource(Fea, "first,abbr", ", ") + ")";
+	var FeaUse = Fea["Use" + old] + (Fea["Use" + old] && !isNaN(Fea["Use" + old]) ? "\xD7 per " : "") + Fea["Recov" + old];
+	if (FeaUse && Fea["AltRecov" + old]) FeaUse += " or " + Fea["AltRecov" + old];
+
 	var FeaPost = "";
 	if (Fea["Add" + old] && FeaUse) {
-		FeaPost = " [" + Fea["Add" + old] + ", " + FeaUse + "]";
+		FeaPost = " #[" + Fea["Add" + old] + ", " + FeaUse + "]#";
 	} else if (Fea["Add" + old]) {
-		FeaPost = " [" + Fea["Add" + old] + "]";
+		FeaPost = " #[" + Fea["Add" + old] + "]#";
 	} else if (FeaUse) {
-		FeaPost = " [" + FeaUse + "]";
+		FeaPost = " #[" + FeaUse + "]#";
 	}
 
-	var FeaName = SubChoice && FeaKey[SubChoice] ? FeaKey[SubChoice].name : FeaKey.name;
-	var FeaFirstLine = "\u25C6 " + FeaName + FeaRef;
+	var FeaName = SubChoice && oClFea[SubChoice] ? (oClFea[SubChoice].name ? oClFea[SubChoice].name : SubChoice) : oClFea.name;
+	var FeaFirstLine = "#\u25C6 " + FeaName + "#" + FeaRef;
 	var FeaDescr = Fea["Descr" + old];
 	if (isArray(FeaDescr)) FeaDescr = desc(FeaDescr);
 	if (What("Unit System") == "metric") {
 		FeaPost = ConvertToMetric(FeaPost, 0.5);
 		FeaDescr = ConvertToMetric(FeaDescr, 0.5);
 	}
-	var FeaOtherLines = FeaPost + FeaDescr;
 
-	return [FeaFirstLine + (Fea.extFirst ? FeaPost : ""), "\r" + FeaFirstLine + FeaOtherLines, FeaFirstLine];
+	return [
+		FeaFirstLine + (Fea.extFirst ? FeaPost : ""),
+		"\r" + FeaFirstLine + FeaPost + FeaDescr,
+		FeaFirstLine
+	];
 };
 
 function ParseClassFeatureExtra(theClass, theFeature, extraChoice, Fea, ForceOld, ForceExtraname) {
-	var clObj = typeof theClass == "string" ? adapter_helper_get_class_property(theClass, "features")[theFeature] : theClass;
-	var FeaKey = clObj && clObj[extraChoice.toLowerCase()] ? clObj[extraChoice.toLowerCase()] : false;
-	if (!FeaKey || !FeaKey.name) return ["", ""];
+	var sSubclass = wasm_character.get_subclass(theClass) ? wasm_character.get_subclass(theClass) : false;
+	var isSubclassFeature = sSubclass && ClassSubList[sSubclass].features[theFeature] && (!ClassList[theClass].features[theFeature] || /^subclassfeature\d+\.?\d*$/.test(theFeature));
+	var oClFea = isSubclassFeature ? ClassSubList[sSubclass].features[theFeature] : ClassList[theClass].features[theFeature];
+	var oClFeaCh = oClFea ? oClFea[extraChoice.toLowerCase()] : false;
+	if (!oClFeaCh) return ["", ""];
 	var old = ForceOld ? "Old" : "";
 	if (old) Fea.source = Fea.sourceOld;
 
-	var extraNm = FeaKey.extraname ? FeaKey.extraname : ForceExtraname ? ForceExtraname : clObj.extraname ? clObj.extraname : clObj.name;
+	var extraNm = oClFeaCh.extraname !== undefined ? oClFeaCh.extraname : ForceExtraname ? ForceExtraname : oClFea.extraname ? oClFea.extraname : false;
+	if (!extraNm) {
+		var className = isSubclassFeature ?
+			(ClassSubList[sSubclass].subnameShort ? ClassSubList[sSubclass].subnameShort : ClassSubList[sSubclass].subname) :
+			(ClassList[theClass].nameShort ? ClassList[theClass].nameShort : ClassList[theClass].name);
+		var feaMinlevel = oClFeaCh.minlevel ? oClFeaCh.minlevel : oClFea.minlevel;
+		extraNm = className + " " + feaMinlevel;
+	}
 	var FeaRef = " (" + extraNm + stringSource(Fea, "first,abbr", ", ") + ")";
-	var FeaUse = Fea["Use" + old] + (Fea["Use" + old] && !isNaN(Fea["Use" + old]) ? "\xD7 per " : "") + Fea["Recov" + old] + (Fea["AltRecov" + old] ? " or " + Fea["AltRecov" + old] : "");
+	var FeaUse = Fea["Use" + old] + (Fea["Use" + old] && !isNaN(Fea["Use" + old]) ? "\xD7 per " : "") + Fea["Recov" + old];
+	if (FeaUse && Fea["AltRecov" + old]) FeaUse += " or " + Fea["AltRecov" + old];
+
 	var FeaPost = "";
 	if (Fea["Add" + old] && FeaUse) {
-		FeaPost = " [" + Fea["Add" + old] + ", " + FeaUse + "]";
+		FeaPost = " #[" + Fea["Add" + old] + ", " + FeaUse + "]#";
 	} else if (Fea["Add" + old]) {
-		FeaPost = " [" + Fea["Add" + old] + "]";
+		FeaPost = " #[" + Fea["Add" + old] + "]#";
 	} else if (FeaUse) {
-		FeaPost = " [" + FeaUse + "]";
+		FeaPost = " #[" + FeaUse + "]#";
 	};
 
-	var FeaFirstLine = "\u25C6 " + FeaKey.name + FeaRef;
+	var FeaName = oClFeaCh.name ? oClFeaCh.name : extraChoice;
+	var FeaFirstLine = "#\u25C6 " + FeaName + "#" + FeaRef;
 	var FeaDescr = Fea["Descr" + old];
 	if (isArray(FeaDescr)) FeaDescr = desc(FeaDescr);
 	if (What("Unit System") == "metric") {
@@ -4132,7 +4276,11 @@ function ParseClassFeatureExtra(theClass, theFeature, extraChoice, Fea, ForceOld
 	}
 	var FeaOtherLines = FeaPost + FeaDescr;
 
-	return [FeaFirstLine + (ForceOld ? "" : FeaPost), "\r" + FeaFirstLine + FeaOtherLines, FeaFirstLine];
+	return [
+		FeaFirstLine + (ForceOld ? "" : FeaPost),
+		"\r" + FeaFirstLine + FeaOtherLines,
+		FeaFirstLine
+	];
 };
 
 //change all the level-variables gained from classes and races
@@ -4216,10 +4364,7 @@ async function UpdateLevelFeatures(Typeswitch, newLvlForce, classesToUpdate, old
 						false // forceNonCurrent
 					);
 				} catch (error) {
-					var eText = 'The "' + propFea.name + '" feature from the "' + raceName + '" race produced an error! Please contact the author of the feature to correct this issue:\n ' + error;
-					for (var e in error) eText += "\n " + e + ": " + error[e];
-					console.println(eText);
-					console.show();
+					displayError(error, 'The "' + propFea.name + '" feature from the "' + raceName + '" race produced the error below. Please share this error message with its author so they can correct this issue.');
 				}
 			}
 		}
@@ -4246,13 +4391,10 @@ async function UpdateLevelFeatures(Typeswitch, newLvlForce, classesToUpdate, old
 					aFeat, // fObjName
 					[oldFeatLvl, newFeatLvl, false], // lvlA [old-level, new-level, force-apply]
 					[aFeatVar, aFeatVar, false], // choiceA [old-choice, new-choice, "only"|"change"]
-					false // forceNonCurrent
+					false // forceNonCurrentgetFeatArrayFromOptions
 				);
 			} catch (error) {
-				var eText = 'The feat "' + theFeat.name + '" produced an error! Please contact the author of the feature to correct this issue:\n ' + error;
-				for (var e in error) eText += "\n " + e + ": " + error[e];
-				console.println(eText);
-				console.show();
+				displayError(error, 'The feat "' + theFeat.name + '" produced the error below. Please share this error message with its author so they can correct this issue.');
 			}
 		}
 		CurrentFeats.level = newFeatLvl;
@@ -4284,10 +4426,7 @@ async function UpdateLevelFeatures(Typeswitch, newLvlForce, classesToUpdate, old
 					false // forceNonCurrent
 				);
 			} catch (error) {
-				var eText = 'The magic item "' + theItem.name + '" produced an error! Please contact the author of the feature to correct this issue:\n ' + error;
-				for (var e in error) eText += "\n " + e + ": " + error[e];
-				console.println(eText);
-				console.show();
+				displayError(error, 'The magic item "' + theItem.name + '" produced the error below. Please share this error message with its author so they can correct this issue.');
 			}
 		}
 		CurrentMagicItems.level = newItemLvl;
@@ -4339,24 +4478,24 @@ async function UpdateLevelFeatures(Typeswitch, newLvlForce, classesToUpdate, old
 			thermoM(1/5);
 
 			// process the class heading
+			var newHeaderString = "**" + classFullName + ", level " + newClassLvl[aClass] + ":**";
 			if (newClassLvl[aClass] == 0) { // remove the heading
-				var oldHeaderString = classFullName + ", level " + oldClassLvl[aClass] + ":";
-				if (What("Class Features").indexOf("\r\r" + oldHeaderString) !== -1) oldHeaderString = "\r\r" + oldHeaderString;
-				RemoveString("Class Features", oldHeaderString, false);
+				var oldHeaderString = ".*[*_~#]+" + classFullName.RegEscape() + ".*, level \\d+.*";
+				if (RegExp("\\r\\r" + oldHeaderString, "i").test(What("Class Features"))) oldHeaderString = "\\r\\r" + oldHeaderString;
+				RemoveString("Class Features", oldHeaderString, false, true);
 			} else if (oldClassLvl[aClass] == 0) { // add the heading
-				var newHeaderString = classFullName + ", level " + newClassLvl[aClass] + ":";
 				if (What("Class Features")) newHeaderString = "\r\r" + newHeaderString;
 				AddString("Class Features", newHeaderString, false);
 			} else { // update the heading
-				var newHeaderString = classFullName + ", level " + newClassLvl[aClass] + ":";
-				var oldHeaderString = !classes.old[aClass] ? "" : classes.old[aClass].fullname.RegEscape() + ".*, level \\d+:";
+				var oldHeaderString = !classes.old[aClass] ? "" : ".*[*_~#]+" + classes.old[aClass].fullname.RegEscape() + ".*, level \\d+.*";
 				ReplaceString("Class Features", newHeaderString, false, oldHeaderString, true);
 			}
 
 			// loop through the features
 			var LastProp = newHeaderString, feaA = [];
+			var loweredLvl = oldClassLvl[aClass] > newClassLvl[aClass];
 			for (var key in classFeatures) feaA.push(key);
-			if (oldClassLvl[aClass] > newClassLvl[aClass]) feaA.reverse(); // when removing, loop through them backwards
+			if (loweredLvl) feaA.reverse(); // when removing, loop through them backwards
 			for (var f = 0; f < feaA.length; f++) {
 				var prop = feaA[f];
 				var propFea = classFeatures[prop];
@@ -4381,31 +4520,34 @@ async function UpdateLevelFeatures(Typeswitch, newLvlForce, classesToUpdate, old
 					);
 
 					// add/remove/update the feature text on the second page
-					var FeaOldString = ParseClassFeature(aClass, prop, oldClassLvl[aClass], forceProp, Fea.ChoiceOld, forceProp ? false : Fea, false, oldSubClass);
-					Fea.extFirst = true; // signal that we need the full first line for FeaNewString
-					var FeaNewString = ParseClassFeature(aClass, prop, newClassLvl[aClass], false, Fea.Choice, Fea, false, newSubClass ? newSubClass : oldSubClass);
-					// see what type of change we have to do
-					var textAction = Fea.CheckLVL && !Fea.AddFea ? "remove" : // level dropped below minlevel
-						Fea.CheckLVL && Fea.AddFea && (!forceProp || (forceProp && !isClassProp)) ? "insert" : // level rose above minlevel and there is nothing to replace
-						forceProp || (Fea.AddFea && Fea.changed && Fea.Descr !== Fea.DescrOld) ? "replace" : // forcing the new version or update the whole text after a description change
-						Fea.AddFea && Fea.changed && Fea.Descr === Fea.DescrOld ? "first" : // update just header after a usages/recovery/additional change
-						false;
-					// do the text change, if any
-					if (textAction) {
-						var doTextAction = applyClassFeatureText(textAction, ["Class Features"], FeaOldString, FeaNewString, LastProp);
-						if (doTextAction === false && textAction !== "remove") {
-							// This failed, so just add it to the end of the field
-							AddString("Class Features", FeaNewString[1], true);
+					if (propFea.description !== undefined) {
+						var FeaOldString = ParseClassFeature(aClass, prop, oldClassLvl[aClass], forceProp, Fea.ChoiceOld, forceProp ? false : Fea, false, oldSubClass);
+						Fea.extFirst = true; // signal that we need the full first line for FeaNewString
+						var FeaNewString = ParseClassFeature(aClass, prop, newClassLvl[aClass], false, Fea.Choice, Fea, false, newSubClass ? newSubClass : oldSubClass);
+						// see what type of change we have to do
+						var textAction = (!Fea.AddFea && Fea.CheckLVL) || (Fea.AddFea && !Fea.Display) ? "remove" : // level dropped below minlevel or new description is undefined
+							Fea.CheckLVL && Fea.AddFea && (!forceProp || !isClassProp) ? "insert" : // level rose above minlevel and there is nothing to replace
+							Fea.AddFea && Fea.Display && !Fea.DisplayOld ? "insert" : // description at previous level was undefined, but now there is something to insert
+							forceProp || (Fea.AddFea && Fea.changed && Fea.Descr !== Fea.DescrOld) ? "replace" : // forcing the new version or update the whole text after a description change
+							Fea.AddFea && Fea.changed && Fea.Descr === Fea.DescrOld ? "first" : // update just header after a usages/recovery/additional change
+							false;
+							// do the text change, if any
+						if (textAction) {
+							if (textAction === "insert" && loweredLvl) textAction = "insertbefore";
+							var doTextAction = applyClassFeatureText(textAction, ["Class Features"], FeaOldString, FeaNewString, LastProp);
+							if (doTextAction === false && textAction !== "remove") {
+								// This failed, so just add it to the end of the field
+								AddString("Class Features", FeaNewString[1].replace(/^[\r\n]*/, ''), true);
+							}
+						}
+
+						// keep track of the last property's header text (don't just use FeaNewString, as it might include an additional or recovery)
+						if (Fea.Display && propFea.minlevel <= ClassLevelUp[aClass][2]) {
+							LastProp = FeaNewString[2];
 						}
 					}
-
-					// keep track of the last property's header text (don't use FeaNewString, as it might include an additional or recovery)
-					LastProp = propFea.minlevel <= ClassLevelUp[aClass][2] ? FeaNewString[2] : LastProp;
 				} catch (error) {
-					var eText = 'The "' + propFea.name + '" feature from the "' + classFullName + '" class produced an error! Please contact the author of the feature to correct this issue:\n ' + error;
-					for (var e in error) eText += "\n " + e + ": " + error[e];
-					console.println(eText);
-					console.show();
+					displayError(error, 'The "' + propFea.name + '" feature from the "' + classFullName + '" class produced the error below. Please share this error message with its author so they can correct this issue.');
 				}
 
 				// see if this is a wild shape feature
@@ -4430,18 +4572,20 @@ async function UpdateLevelFeatures(Typeswitch, newLvlForce, classesToUpdate, old
 							false // forceNonCurrent
 						);
 						// add/remove/update the feature text on the third/second page
-						var xtrFeaOldString = ParseClassFeatureExtra(aClass, prop, xtrProp, xtrFea, true);
-						var xtrFeaNewString = ParseClassFeatureExtra(aClass, prop, xtrProp, xtrFea, false);
-						// see what type of change we have to do
-						var xtrTextAction = Fea.CheckLVL && !Fea.AddFea ? "remove" : // level dropped below minlevel
-							xtrFea.AddFea && xtrFea.changed && xtrFea.Descr !== xtrFea.DescrOld ? "replace" : // update the whole text after a description change
-							xtrFea.AddFea && xtrFea.changed && xtrFea.Descr === xtrFea.DescrOld ? "first" : // update just header after a usages/recovery/additional change
-							false;
-						// do the text change, if any
-						if (IsNotImport && xtrTextAction) {
-							applyClassFeatureText(xtrTextAction, ["Extra.Notes", "Class Features"], xtrFeaOldString, xtrFeaNewString, false);
-						} else if (propFea.extrachoices && !IsNotImport) {
-							AddString("Extra.Notes", xtrFeaNewString[1].replace(/^(\r|\n)*/, ''), true);
+						if (propFea[xtrProp].description !== undefined) {
+							var xtrFeaOldString = ParseClassFeatureExtra(aClass, prop, xtrProp, xtrFea, true);
+							var xtrFeaNewString = ParseClassFeatureExtra(aClass, prop, xtrProp, xtrFea, false);
+							// see what type of change we have to do
+							var xtrTextAction = Fea.CheckLVL && !Fea.AddFea ? "remove" : // level dropped below minlevel
+								xtrFea.AddFea && xtrFea.changed && xtrFea.Descr !== xtrFea.DescrOld ? "replace" : // update the whole text after a description change
+								xtrFea.AddFea && xtrFea.changed && xtrFea.Descr === xtrFea.DescrOld ? "first" : // update just header after a usages/recovery/additional change
+								false;
+							// do the text change, if any
+							if (IsNotImport && xtrTextAction) {
+								applyClassFeatureText(xtrTextAction, ["Extra.Notes", "Class Features"], xtrFeaOldString, xtrFeaNewString, false);
+							} else if (propFea.extrachoices && !IsNotImport) {
+								AddString("Extra.Notes", xtrFeaNewString[1].replace(/^[\r\n]*/, ''), true);
+							}
 						}
 					}
 				}
@@ -4458,12 +4602,13 @@ async function UpdateLevelFeatures(Typeswitch, newLvlForce, classesToUpdate, old
 // Make menu for 'choose class feature' button and parse it to Menus.classfeatures
 function MakeClassMenu() {
 	var gatherVars, hasEldritchBlast, isFS = false, selFS = GetFightingStyleSelection();
-	var testPrereqs = function(toEval, objNm, feaNm) {
+	var testPrereqs = function(toEval, objNm, feaNm, curSel) {
 		if (!gatherVars) {
 			gatherVars = gatherPrereqevalVars();
 			hasEldritchBlast = gatherVars.hasEldritchBlast;
 		}
 		gatherVars.choice = objNm;
+		gatherVars.choiceActive = curSel;
 		var theRe = true;
 		try {
 			if (typeof toEval == 'string') {
@@ -4472,10 +4617,7 @@ function MakeClassMenu() {
 				theRe = toEval(gatherVars);
 			}
 		} catch (error) {
-			var eText = "The prerequisite check code (prereqeval) for '" + objNm + "' of the '" + feaNm + "' feature produced an error! Please contact the author of the feature to correct this issue:\n " + error;
-			for (var e in error) eText += "\n " + e + ": " + error[e];
-			console.println(eText);
-			console.show();
+			displayError(error, 'The "prereqeval" function from "' + objNm + '" of the "' + feaNm + '" feature produced the error below. Please share this error message with its author so they can correct this issue.');
 		}
 		return theRe;
 	}
@@ -4498,8 +4640,7 @@ function MakeClassMenu() {
 			var feaObjNm = array[i].toLowerCase();
 			var feaObjA = feaObj[feaObjNm];
 			if (!feaObjA) { // object doesn't exist, so warn user
-				console.println("The object corresponding to '" + array[i] + "' doesn't exist in the '" + featureNm + "' feature. This is a discrepancy between the '" + extrareturn + "choices' array and the names of the objects. Note that the object name needs to be exactly '" + array[i].toLowerCase() + "' (identical, but fully lower case).");
-				console.show();
+				displayError(false, 'The object corresponding to "' + array[i] + '" doesn\'t exist in the "' + featureNm + '" feature. This is a discrepancy between the `' + extrareturn + 'choices` array and the names of the objects. Note that the object name needs to be exactly "' + array[i].toLowerCase() + '" (identical, but completely lower case).');
 				continue;
 			};
 			// is this feature selected? Than mark it!
@@ -4508,18 +4649,19 @@ function MakeClassMenu() {
 			if (!isActive && testSource("", feaObjA)) continue; // object's source is excluded, so skip it if not currently selected
 
 			// now see if we should disable this because of prerequisites
-			var isEnabled = feaObjA.prereqeval && !ignorePrereqs && !isActive ? testPrereqs(feaObjA.prereqeval, feaObjNm, featureNm) : true;
+			var isEnabled = isActive || ignorePrereqs ? true :
+				feaObjA.minlevel && feaObjA.minlevel > wasm_character.get_class_level(classNm) ? false :
+				!feaObjA.prereqeval || testPrereqs(feaObjA.prereqeval, feaObjNm, featureNm, curSel);
 			if (isEnabled === "skip") continue; // special failsafe for choices that return "skip" on their prepreqeval
 			if (isEnabled && !isActive && isFS && selFS[feaObjNm]) {
 				isEnabled = false;
 				extraNm = selFS[feaObjNm][2];
 			}
-			var removeStop = !isActive ? "add" : extrareturn ? "remove" : "stop";
-
 			if (!isActive && isEnabled === "markButDisable") {
 				isActive = true;
 				isEnabled = false;
 			}
+			var removeStop = !isActive ? "add" : extrareturn ? "remove" : "stop";
 
 			// now make the menu entry
 			var oSrc = { source : feaObjA.source ? feaObjA.source : feaObj.source };
@@ -4531,15 +4673,19 @@ function MakeClassMenu() {
 			};
 			// test if the menu entry shouldn't be another layer deeper
 			if (feaObjA.submenu) {
-				// create entry for this submenu if it doesn't already exist
-				if (!toSub[feaObjA.submenu]) {
-					toSub[feaObjA.submenu] = [];
-					temp.push({
-						cName : feaObjA.submenu,
-						oSubMenu : []
-					})
+				var submenus = isArray(feaObjA.submenu) ? feaObjA.submenu : [feaObjA.submenu];
+				for (var s = 0; s < submenus.length; s++) {
+					var submenu = submenus[s];
+					// create entry for this submenu if it doesn't already exist
+					if (!toSub[submenu]) {
+						toSub[submenu] = [];
+						temp.push({
+							cName : submenu,
+							oSubMenu : []
+						})
+					}
+					toSub[submenu].push(mItem);
 				}
-				toSub[feaObjA.submenu].push(mItem);
 			} else {
 				temp.push(mItem);
 			}
@@ -4574,8 +4720,8 @@ function MakeClassMenu() {
 		var tempItem = [];
 		for (prop in classFeatures) {
 			propFea = classFeatures[prop];
+			isFS = /fighting style/i.test(prop + propFea.name);
 			if (propFea.choices && !propFea.choicesNotInMenu && propFea.minlevel <= clLvl) {
-				isFS = (/fighting style/i).test(prop + propFea.name);
 				toTest = GetFeatureChoice("classes", aClass, prop, false);
 				propFea.choices.sort();
 				menuLVL3(tempItem, propFea.name, propFea.choices, aClass, prop, "", propFea, toTest);
@@ -4584,7 +4730,7 @@ function MakeClassMenu() {
 				toTest = GetFeatureChoice("classes", aClass, prop, true);
 				toTestNr = nrFoundInExtraChoices(toTest, propFea.extrachoices);
 				propFea.extrachoices.sort();
-				toChooseNr = propFea.extraTimes ? propFea.extraTimes[Math.min(propFea.extraTimes.length, clLvl) - 1] : 0;
+				toChooseNr = !propFea.extraTimes ? 0 : !isArray(propFea.extraTimes) ? propFea.extraTimes : propFea.extraTimes[Math.min(propFea.extraTimes.length, clLvl) - 1];
 				toChooseNr += getBonusClassExtraChoiceNr(aClass, prop); // Add extra allowed for 'bonus' entries
 				toChooseStr = " (" + "selected " + toTestNr + (toChooseNr ? " of " + toChooseNr : "") + ")";
 				menuLVL3(tempItem, propFea.extraname + toChooseStr, propFea.extrachoices, aClass, prop, "extra", propFea, toTest);
@@ -4684,8 +4830,8 @@ async function ClassFeatureOptions(Input, AddRemove, ForceExtraname, triggerIsMe
 		propFea = adapter_helper_get_class_property(aClass, "features")[prop];
 		var unknownClass = false;
 	}
-	var propFeaCs = propFea ? propFea[choice] : false;
-	if (!propFea || !propFeaCs) return cleanTempClassesKnown(); // no objects to process, so go back
+	if (!propFea || !propFea[choice]) return cleanTempClassesKnown(); // no objects to process, so go back
+	var propFeaCs = propFea[choice];
 
 	var propMinLvl = propFea.minlevel ? propFea.minlevel : 1;
 	var clLvl = unknownClass ? propMinLvl : wasm_character.get_class_level(aClass);
@@ -4725,23 +4871,23 @@ async function ClassFeatureOptions(Input, AddRemove, ForceExtraname, triggerIsMe
 
 		thermoM(3/5); //increment the progress dialog's progress
 
-		// do something with the text of the feature
-		var feaString = ParseClassFeatureExtra(
-			unknownClass ? propFea : aClass,
-			prop, choice, Fea, !addIt, ForceExtraname);
+		// do something with the text of the feature, if any description is set
+		if (propFeaCs.description !== undefined) {
+			var feaString = ParseClassFeatureExtra(aClass, prop, choice, Fea, !addIt, ForceExtraname);
 
-		if (addIt) { // add the string to the third page
-			AddString("Extra.Notes", feaString[1].replace(/^(\r|\n)*/, ''), true);
-			var extraNm = propFeaCs.extraname ? propFeaCs.extraname : ForceExtraname ? ForceExtraname : propFea.extraname ? propFea.extraname : propFea.name;
-			var changeMsg = "The " + extraNm + ' "' + propFeaCs.name + '" has been added to the Notes section on the third page' + ". They wouldn't fit in the Class Features section if the class is taken to level 20.";
-			CurrentUpdates.types.push("notes");
-			if (!CurrentUpdates.notesChanges) {
-				CurrentUpdates.notesChanges = [changeMsg];
-			} else {
-				CurrentUpdates.notesChanges.push(changeMsg);
+			if (addIt) { // add the string to the third page
+				AddString("Extra.Notes", feaString[1].replace(/^[\r\n]*/, ''), true);
+				var extraNm = propFeaCs.extraname ? propFeaCs.extraname : ForceExtraname ? ForceExtraname : propFea.extraname ? propFea.extraname : propFea.name;
+				var changeMsg = "The " + extraNm + ' "' + propFeaCs.name + '" has been added to the Notes section on the third page' + ". They wouldn't fit in the Class Features section if the class is taken to level 20.";
+				CurrentUpdates.types.push("notes");
+				if (!CurrentUpdates.notesChanges) {
+					CurrentUpdates.notesChanges = [changeMsg];
+				} else {
+					CurrentUpdates.notesChanges.push(changeMsg);
+				}
+			} else { // remove the string from the third (or second) page
+				applyClassFeatureText("remove", ["Extra.Notes", "Class Features"], feaString, "", false);
 			}
-		} else { // remove the string from the third (or second) page
-			applyClassFeatureText("remove", ["Extra.Notes", "Class Features"], feaString, "", false);
 		}
 	} else if (addIt) { // a choice to replace the feature on the second page
 		var choiceOld = GetFeatureChoice("classes", aClass, prop, false);
@@ -4754,10 +4900,12 @@ async function ClassFeatureOptions(Input, AddRemove, ForceExtraname, triggerIsMe
 			false // forceNonCurrent
 		);
 		thermoM(3/5); //increment the progress dialog's progress
-		// do something with the text of the feature
-		var feaString = ParseClassFeature(aClass, prop, clLvl, false, choice, Fea);
-		var feaStringOld = ParseClassFeature(aClass, prop, clLvlOld, false, choiceOld, Fea, true, subClassOld);
-		applyClassFeatureText("replace", ["Class Features"], feaStringOld, feaString, false);
+		// do something with the text of the feature, if any description is set
+		if (propFeaCs.description !== undefined) {
+			var feaString = ParseClassFeature(aClass, prop, clLvl, false, choice, Fea);
+			var feaStringOld = ParseClassFeature(aClass, prop, clLvlOld, false, choiceOld, Fea, true, subClassOld);
+			applyClassFeatureText("replace", ["Class Features"], feaStringOld, feaString, false);
+		}
 	}
 
 	cleanTempClassesKnown();
@@ -4894,11 +5042,8 @@ function CalcAC() {
 					if (acVals[aMod.type] !== undefined) acVals[aMod.type] -= removeVal;
 				}
 			} catch (error) {
-				var eText = "The check if the AC bonus from '" + aMod.name + "' should be added or not produced an error! This check will be removed from the sheet for now, but please contact the author of the feature to have this issue corrected:\n " + error;
-				for (var e in error) eText += "\n " + e + ": " + error[e];
-				console.println(eText);
-				console.show();
 				delete aMod.stopeval;
+				displayError(error, 'The "stopeval" function from "' + aMod.name + '" produced the error below. It will be removed for now, but please share this error message with its author so they can correct this issue.');
 			}
 		}
 	}
@@ -5501,15 +5646,17 @@ function ApplyAmmo(inputtxt, fieldName) {
 function AddAmmo(inputtxt, amount) {
 	var AmmoFlds = [ "AmmoLeftDisplay.Name", "AmmoRightDisplay.Name" ];
 	var AmountFlds = [ "AmmoLeftDisplay.Amount", "AmmoRightDisplay.Amount" ];
+	var AmmoName = AmmoList[inputtxt] ? AmmoList[inputtxt].name : inputtxt;
+	var AmmoRx = RegExp(inputtxt.RegEscape() + '|' + AmmoName.RegEscape(), "i");
 	amount = amount && !isNaN(Number(amount)) ? Number(amount) : 0;
 	for (var n = 1; n <= 2; n++) {
 		for (var i = 0; i < AmmoFlds.length; i++) {
 			var next = tDoc.getField(AmmoFlds[i]);
-			if (n === 1 && ((RegExp(inputtxt.RegEscape(), "i")).test(next.value) || next.value.toLowerCase().indexOf(inputtxt.toLowerCase()) !== -1)) {
+			if (n === 1 && (AmmoRx.test(next.value) || (next.value.toLowerCase().indexOf(AmmoName.toLowerCase()) !== -1))) {
 				if (amount) tDoc.getField(AmountFlds[i]).value += amount;
 				return;
 			} else if (n === 2 && next.value === "") {
-				next.value = AmmoList[inputtxt] ? AmmoList[inputtxt].name : inputtxt;
+				next.value = AmmoName;
 				if (amount) Value(AmountFlds[i], amount);
 				return;
 			}
@@ -5846,13 +5993,13 @@ function ConvertToMetric(inputString, rounded, exact) {
 			total = amount * UnitsList[ratio].lengthInch;
 			unit = "cm";
 			break;
-		 case "cu ft" : case "cubic foot" : case "cubic feet" : case "cu foot" : case "cu feet" : case "cubic ft" :
+		 case "cu ft" : case "cubic foot" : case "cubic feet" : case "cu foot" : case "cu feet" : case "cubic ft" : case "ft3" : case "ft\u00B3" :
 			total = amount * UnitsList[ratio].volume;
-			unit = "m3";
+			unit = "m\u00B3"; // m³
 			if (total < 0.25) {
 				// for very small volumes, we are going to use dm3
 				total *= 1000;
-				unit = 'dm3';
+				unit = 'dm\u00B3'; // dm³
 			} else if (total < 1 && rounding > 0.03) {
 				// for relatively small volumes, we are going to round to 0.03 accuracy
 				total = RoundTo(total, 0.03, false, true);
@@ -5863,9 +6010,9 @@ function ConvertToMetric(inputString, rounded, exact) {
 				isRounded = true;
 			}
 			break;
-		 case "sq ft" : case "square foot" : case "square feet" : case "sq feet" : case "sq foot" : case "square ft" :
+		 case "sq ft" : case "square foot" : case "square feet" : case "sq feet" : case "sq foot" : case "square ft" : case "ft2" : case "ft\u00B2" :
 			total = amount * UnitsList[ratio].surface;
-			unit = "m2";
+			unit = "m\u00B2"; // m²
 			break;
 		 case "lb" : case "lbs" : case "pound" : case "pounds" :
 			total = amount * UnitsList[ratio].mass;
@@ -5881,7 +6028,7 @@ function ConvertToMetric(inputString, rounded, exact) {
 			break;
 		 case "\u00B0 f" : case "\u00B0f" : case "degree fahrenheit" : case "degrees fahrenheit" : case "fahrenheit" :
 			total = RoundTo((amount - 32) * 5/9, exact ? 0.01 : 1, false, true);
-			unit = "\u00B0C";
+			unit = "\u00B0C"; //°C
 			isRounded = true;
 			break;
 		}
@@ -5889,23 +6036,23 @@ function ConvertToMetric(inputString, rounded, exact) {
 	}
 
 	// find all labeled measurements in string
-	var measurements = inputString.match(/(\b|-)\d+[,./]?\d*\/?(-?\d+?[,./]?\d*)?\s?-?('\d+\w?"($|\W)|'($|\W)|"($|\W)|(in|inch|inches|miles?|(?:cubic|cu|square|sq)? ?f(?:oo|ee)?t|lbs?|pounds?|gal(?:lons?)?|q(?:uar)ts?|\u00B0 ?f|(?:degrees? )?fahrenheit)\b)/ig);
+	var measurements = inputString.match(/(\b|-)\d+[,./]?\d*\/?(-?\d+?[,./]?\d*)?\s?-?('\d+\w?"($|\W)|'($|\W)|"($|\W)|f(?:oo|ee)?t[\u00B2\u00B3]|(in|inch|inches|miles?|(?:cubic|cu|square|sq)? ?f(?:oo|ee)?t[23]?|lbs?|pounds?|gal(?:lons?)?|q(?:uar)?ts?|\u00B0 ?f|(?:degrees? )?fahrenheit)\b)/ig);
 
 	if (measurements) {
 		for (var i = 0; i < measurements.length; i++) {
-			if ((/'.+"/).test(measurements[i])) {
-				if ((/'.+"\W/).test(measurements[i])) {
+			if (/'.+"/.test(measurements[i])) {
+				if (/'.+"\W/.test(measurements[i])) {
 					measurements[i] = measurements[i].substr(0, measurements[i].length - 1);
 				}
 				var orgFT = parseFloat(measurements[i].substring(0,measurements[i].indexOf("'")));
 				var orgIN = parseFloat(measurements[i].substring(measurements[i].indexOf("'") + 1, measurements[i].indexOf('"')));
 				var resulted = theConvert(parseFloat(orgIN/12) + parseFloat(orgFT), "ft");
 			} else {
-				if ((/\d+('|")\W/).test(measurements[i])) {
+				if (/\d+('|")\W/.test(measurements[i])) {
 					measurements[i] = measurements[i].substr(0, measurements[i].length - 1);
 				}
 				var org = measurements[i].replace(/,/g, ".");
-				var orgUnit = org.match(/[-\s]*([\u00B0 A-z'"]+)$/)[1].toLowerCase();
+				var orgUnit = org.match(/[-\s]*([\u00B0 A-z'"]+[\u00B22\u00B33]?)$/)[1].toLowerCase();
 				var fraction;
 
 				if (fraction = org.match(/(-?\d+\.?\d*)\/(-?\d+\.?\d*)/) ){
@@ -5915,7 +6062,7 @@ function ConvertToMetric(inputString, rounded, exact) {
 				}
 			}
 	
-			var delimiter = (/.*\d+([\s- ]*?)\w/).test(measurements[i]) ? measurements[i].match(/.*\d+([\s- ]*?)\w/)[1] : " ";
+			var delimiter = /.*\d+([\s- ]*?)\w/.test(measurements[i]) ? measurements[i].match(/.*\d+([\s- ]*?)\w/)[1] : " ";
 
 			if (isArray(resulted[0])) {
 				var theResult = RoundTo(resulted[0][0], rounding, false, true) + "/" + RoundTo(resulted[1][0], rounding, false, true) + delimiter + resulted[1][1];
@@ -5953,9 +6100,9 @@ function ConvertToImperial(inputString, rounded, exact, toshorthand) {
 			total = amount / UnitsList[ratio].distance;
 			unit = total === 1 ? "mile" : "miles";
 			break;
-		 case "dm3" : case "cubic decimeter" : case "cubic decimeters" : case "cubic decimetre" : case "cubic decimetres" :
+		 case "dm3" : case "dm\u00B3" : case "cubic decimeter" : case "cubic decimeters" : case "cubic decimetre" : case "cubic decimetres" :
 			amount /= 1000;
-		 case "m3" : case "cubic meter" : case "cubic meters" : case "cubic metre" : case "cubic metres" :
+		 case "m3" : case "m\u00B3" : case "cubic meter" : case "cubic meters" : case "cubic metre" : case "cubic metres" :
 			total = amount / UnitsList[ratio].volume;
 			unit = "cu ft";
 			if (total > 41 && rounding < 2) {
@@ -5963,7 +6110,7 @@ function ConvertToImperial(inputString, rounded, exact, toshorthand) {
 				rounding = 10;
 			}
 			break;
-		 case "m2" : case "square metre" : case "square metres" : case "square meter" : case "square meters" :
+		 case "m2" : case "m\u00B2" : case "square metre" : case "square metres" : case "square meter" : case "square meters" :
 			total = amount / UnitsList[ratio].surface;
 			unit = "sq ft";
 			break;
@@ -5984,7 +6131,7 @@ function ConvertToImperial(inputString, rounded, exact, toshorthand) {
 			break;
 		 case "\u00B0 c" : case "\u00B0c" : case "degree celsius" : case "degrees celsius" : case "celsius" :
 			total = RoundTo((amount * 9/5) + 32, exact ? 0.01 : 1, false, true);
-			unit = "\u00B0F";
+			unit = "\u00B0F"; // °F
 			isRounded = true;
 			break;
 		}
@@ -5992,12 +6139,12 @@ function ConvertToImperial(inputString, rounded, exact, toshorthand) {
 	}
 
 	// find all labeled measurements in string
-	var measurements = inputString.match(/(\b|-)\d+[,./]?\d*\/?(-?\d+?[,./]?\d*)?\s?-?(m2|d?m3|(?:square )?met(?:re|er)s?|cubic (?:deci)?met(?:re|er)s?|(?:c|k)?m|l|lit(?:er|re)s?|k?g|kilo(?:gram)?s?|\u00B0 ?c|(?:degrees? )?celsius)\b/ig);
+	var measurements = inputString.match(/(\b|-)\d+[,./]?\d*\/?(-?\d+?[,./]?\d*)?\s?-?([dck]?m[\u00B2\u00B3]|([dck]?m[23]?|(?:sq |square )?met(?:re|er)s?|(?:cu |cubic )(?:deci)?met(?:re|er)s?|l|lit(?:er|re)s?|k?g|grams?|kilo(?:gram)?s?|\u00B0 ?c|(?:degrees? )?celsius)\b)/ig);
 
 	if (measurements) {
 		for (var i = 0; i < measurements.length; i++) {
 			var org = measurements[i].replace(/,/g, ".");
-			var orgUnit = org.match(/[-\s]*([\u00B0 A-z']+[23]?)$/)[1].toLowerCase();
+			var orgUnit = org.match(/[-\s]*([\u00B0 A-z']+[\u00B22\u00B33]?)$/)[1].toLowerCase();
 			var fraction;
 
 			if (fraction = org.match(/(-?\d+\.?\d*)\/(-?\d+\.?\d*)/)){
@@ -6006,7 +6153,7 @@ function ConvertToImperial(inputString, rounded, exact, toshorthand) {
 				var resulted = theConvert(parseFloat(org), orgUnit);
 			}
 
-			var delimiter = (/.*\d+([\s- ]*?)\w/).test(measurements[i]) ? measurements[i].match(/.*\d+([\s- ]*?)\w/)[1] : " ";
+			var delimiter = /.*\d+([\s- ]*?)\w/.test(measurements[i]) ? measurements[i].match(/.*\d+([\s- ]*?)\w/)[1] : " ";
 
 			if (isArray(resulted[0])) {
 				var theResult = RoundTo(resulted[0][0], rounding, false, true) + "/" + RoundTo(resulted[1][0], rounding, false, true) + delimiter + resulted[1][1];
@@ -6021,6 +6168,33 @@ function ConvertToImperial(inputString, rounded, exact, toshorthand) {
 		}
 	}
 	return inputString;
+}
+
+// Change an English string form second to first person
+function ConvertToFirstPerson(inputString, convertFunction, origin) {
+	// First all capitalized words, then the same but lowercase
+	var firstPerson = inputString.replace(/Yours/g, "Mine").replace(/yours/ig, "mine")
+	                  .replace(/Your/g, "My").replace(/your/ig, "my")
+	                  .replace(/you aren['\u2019]t/ig, "I am not")
+	                  .replace(/you are/ig, "I am").replace(/you['\u2019]re/ig, "I'm")
+	                  .replace(/(a)re you\b/ig, "$1m I")
+					  .replace(/(a)ren['\u2019]t you\b/ig, "$1m I not")
+	                  .replace(/you were/ig, "I was")
+					  .replace(/(w)ere(n['\u2019]t)? you\b/ig, "$1as$2 I")
+	                  .replace(/you/ig, "I")
+	                  .replace(/(\d+.?(square |cubic )?)f(oo|ee)t\b/ig, "$1ft");
+	// Now correct prepositions where "I" should be "me"
+	firstPerson = firstPerson.replace(/\b(at|to|of|for|on|in|with|by|under|over|above|below|into|towards|through|around|past|as|about) I\b/ig, "$1 me");
+	// If provided with a convertFunction, run it
+	if (/function|=>/.test(convertFunction)) {
+		try {
+			var converted = convertFunction(firstPerson);
+			firstPerson = converted;
+		} catch (error) {
+			displayError(error, 'The "useDescriptionFull" or "formatSpellDescription" attribute from "' + origin + '" produced the error below. It will be ignored for now, but please share this error message with its author so they can correct this issue.');
+		}
+	}
+	return firstPerson;
 }
 
 //update all the decimals in a string or number to reflect the new decimal chosen.

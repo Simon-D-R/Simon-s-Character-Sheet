@@ -90,11 +90,11 @@ function getAccessedFieldIds(code /*String*/) /*Set[String]*/ {
 	}
 	// converted fields
 	for (let abi of ['Cha', 'Str', 'Dex', 'Con', 'Wis', 'Int', 'HoS']) {
-		let abi_matches = [...code.matchAll(/wasm_character.get_ability\('([^']+)'\)/g)];
+		let abi_matches = [...code.matchAll(/wasm_character.get_ability\(['"](\w+)['"]\)/g)];
 		for (let match of abi_matches) {
 			all_matches.add(match[1]);
 		}
-		let abi_mod_matches = [...code.matchAll(/wasm_character.get_ability_modifier\('([^']+)'\)/g)];
+		let abi_mod_matches = [...code.matchAll(/wasm_character.get_ability_modifier\(['"](\w+)['"]\)/g)];
 		for (let match of abi_mod_matches) {
 			all_matches.add(match[1] + "_Mod");
 		}

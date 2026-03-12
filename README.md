@@ -99,7 +99,7 @@ Please see the [How-To Guide - Add More Content](https://www.flapkan.com/how-to/
 ## Known issues
 
 - the global buttons are ugly and only in the upper left corner of the stats tab
-- context menus are not scrollable
+- some of the context menus are not scrollable
 
 ## Legal Information
 Simon's HTML front end for MPMB's D&D 5e Character Record Sheet automates some of the administrative tasks around playing the game of Dungeon & Dragons 5th edition &copy; Wizards of the Coast, Inc.

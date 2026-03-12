@@ -7,7 +7,7 @@ async function InitializeEverything(classes, primaryClass) {
 	InitiateLists();
 	await fetchFixedAdditionalScripts();
 	RunUserScript(true);
-	spellsAfterUserScripts();
+	setStuffAfterUserScripts();
 
 	if (!minVer) {
 		SetGearVariables();
@@ -17,6 +17,10 @@ async function InitializeEverything(classes, primaryClass) {
 		SetRichTextFields();
 		MakeAdventureLeagueMenu();
 	};
+
+	if (!tDoc.info.AdvLogOnly) {
+		setSpellVariables();
+	}
 
 	SetHighlighting();
 	MakeButtons();
