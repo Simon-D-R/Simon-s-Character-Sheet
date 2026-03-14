@@ -70,12 +70,11 @@ function InitiateLists() {
 	}
 };
 
-// A function to generate the spell variables after running imported scripts
-function spellsAfterUserScripts() {
+// A function to do all the fixes after the lists have been re-initialized and the user scripts ran
+function setStuffAfterUserScripts() {
 	if (tDoc.info.AdvLogOnly) return;
 	amendPsionicsToSpellsList();
-	setSpellVariables(undefined);
-};
+}
 
 function setGlobalVars() {
 	tDoc.typeA4 = false;
@@ -152,21 +151,7 @@ var Menus = {
 	"color" : "",
 	"raceoptions" : "",
 	"faqextended" : "",
-	"faq" : [{
-			cName : "Go to the online FAQ (more up to date)",
-			cReturn : "faq#online"
-		}, {
-			cName : "Open the built-in FAQ.pdf",
-			cReturn : "faq#pdf"
-		}, {
-			cName : "-"
-		}, {
-			cName : "See the license used for distributing WotC material (SRD)",
-			cReturn : "faq#srd"
-		}, {
-			cName : "See the license under which this document is distributed",
-			cReturn : "faq#gplv3"
-		}],
+	"faq" : "",
 	"contact" : [{
 		cName : "MPMB's website",
 		cReturn : "contact#website"
@@ -192,8 +177,8 @@ var Menus = {
 		cName : "GitHub",
 		cReturn : "contact#github"
 	}, {
-		cName : "Twitter",
-		cReturn : "contact#twitter"
+		cName : "Bluesky",
+		cReturn : "contact#bluesky"
 	}],
 	"feats" : "",
 	"attacks" : "",

@@ -140,9 +140,7 @@ async function ApplyFeatureAttributes(type, fObjName, lvlA, choiceA, forceNonCur
 				await runEval(evalThing, attributeName, true);
 				return;
 			}
-			var eText = "The " + attributeName + " from '" + fObjName + (aParent ? "' of the '" + aParent : "") + "' " + type + " produced an error! Please contact the author of the feature to correct this issue and please include this error message:\n " + error;
-			console.println(eText);
-			console.show();
+			displayError(error, 'The "' + attributeName + '" attribute from "' + fObjName + (aParent ? '" of the "' + aParent : "") + '" ' + type + " produces the error below and is subsequently ignored.\nPlease share this error message with its author so they can correct this issue.");
 		}
 	}
 
@@ -239,22 +237,30 @@ async function ApplyFeatureAttributes(type, fObjName, lvlA, choiceA, forceNonCur
 		}
 
 		// spellcasting
+		var logChangedSpells = false;
 		if (uObj.spellcastingBonus) await processSpBonus(addIt, uniqueObjNm, uObj.spellcastingBonus, type, aParent, objNm, forceNonCurrent ? true : false);
-		if (CurrentSpells[useSpCasting] && (uObj.spellFirstColTitle || uObj.spellcastingExtra || uObj.spellChanges || uObj.spellcastingExtraApplyNonconform !== undefined)) {
+		if (CurrentSpells[useSpCasting] && (uObj.spellFirstColTitle !== undefined || uObj.spellcastingExtra || uObj.spellChanges || uObj.spellcastingExtraApplyNonconform !== undefined || uObj.spellcastingPreparedCantrips)) {
 			var aCast = CurrentSpells[useSpCasting];
 
-			if (uObj.spellFirstColTitle) {
+			if (uObj.spellFirstColTitle != undefined) {
 				aCast.firstCol = addIt ? uObj.spellFirstColTitle : false;
-				if (!uObj.spellcastingBonus && !uObj.spellcastingExtra && !uObj.spellChanges) {
-					SetStringifieds('spells');
-					CurrentUpdates.types.push("spells");
-				}
+				logChangedSpells = true;
+			}
+
+			if (uObj.spellcastingPreparedCantrips) {
+				processPreparedCantrips(addIt, tipNmF, uObj.spellcastingPreparedCantrips, useSpCasting);
+				logChangedSpells = true;
 			}
 
 			if (uObj.spellcastingExtra || uObj.spellcastingExtraApplyNonconform !== undefined) {
 				processSpellcastingExtra(addIt, useSpCasting, fObj.minlevel, tipNmF, uObj.spellcastingExtra, uObj.spellcastingExtraApplyNonconform);
+				logChangedSpells = false;
 			}
-			if (uObj.spellChanges) processSpChanges(addIt, tipNmF, uObj.spellChanges, useSpCasting);
+
+			if (uObj.spellChanges) {
+				processSpChanges(addIt, tipNmF, uObj.spellChanges, useSpCasting);
+				logChangedSpells = false;
+			}
 		}
 		if (!uObj.spellcastingBonus && addIt && CurrentSpells[useSpCasting] && type !== "classes" && type !== "race" && (uObj.spellcastingAbility !== undefined || uObj.fixedDC || uObj.fixedSpAttack || uObj.allowUpCasting !== undefined || uObj.magicItemComponents !== undefined)) {
 			// will already have been processed if uObj has `spellcastingBonus`
@@ -268,9 +274,12 @@ async function ApplyFeatureAttributes(type, fObjName, lvlA, choiceA, forceNonCur
 			if (uObj.allowUpCasting !== undefined) aCast.allowUpCasting = uObj.allowUpCasting;
 			if (uObj.magicItemComponents !== undefined) aCast.magicItemComponents = uObj.magicItemComponents;
 
+			logChangedSpells = true;
+		};
+		if (logChangedSpells) {
 			SetStringifieds('spells');
 			CurrentUpdates.types.push("spells");
-		};
+		}
 		if (uObj.spellcastingBonusElsewhere) await processSpellcastingBonusElsewhere(addIt, type, tipNm, uniqueObjNm, uObj.spellcastingBonusElsewhere);
 
 		if (addIt) addListOptions(); // add weapon/armour/ammo/creature option(s)
@@ -426,8 +435,7 @@ async function ApplyFeatureAttributes(type, fObjName, lvlA, choiceA, forceNonCur
 	};
 
 	if (!fObj) {
-		console.println("The '" + fObjName + (aParent ? "' of the '" + aParent : "") + "' " + type + " could not be found! Please contact the author of the feature to correct this issue.");
-		console.show();
+		displayError(false, '"The "' + fObjName + (aParent ? '" of the "' + aParent : "") + '" ' + type + ' could not be found! Please contact the author of the feature to correct this issue.');
 		return false;
 	};
 
@@ -591,7 +599,7 @@ async function ApplyClassBaseAttributes(AddRemove, aClass, primaryClass) {
 			} else if (doSkills[2] == n && !isArray(uObj.skills[n]) && SkillsList.abbreviations.indexOf(uObj.skills[n]) == -1 && SkillsList.names.indexOf(uObj.skills[n]) == -1) {
 				// --- backwards compatibility --- //
 				// the class has skillstxt as skills attribute (pre v13)
-				oSkillsTxt = uObj.skills[n].replace(/^( |\n)*.*: |\;$|\.$/g, '');
+				oSkillsTxt = uObj.skills[n].replace(/^( |\n)*.*: |\;$/g, '');
 			} else {
 				// no 'skillstxt' attribute, only 'skills'
 				oSkills = uObj.skills[doSkills[2]];
@@ -651,7 +659,7 @@ function SetFeatureChoice(type, objNm, feaNm, choice, extra) {
 	choice = choice ? choice.toLowerCase() : false;
 	extra = extra ? extra.toLowerCase() : false;
 	type = GetFeatureType(type);
-	if (type === "items" || type === "feats") return;
+	// if (type === "items" || type === "feats") return;
 	if (!CurrentFeatureChoices[type]) CurrentFeatureChoices[type] = {};
 	if (!choice) { // remove the choice
 		if (!CurrentFeatureChoices[type][objNm]) return;
@@ -1049,6 +1057,40 @@ function processSpellcastingExtra(AddRemove, spObjName, lvl, name, spExtra, spNo
 	CurrentUpdates.types.push("spells");
 }
 
+// process the spellcastingPreparedCantrips attribute
+function processPreparedCantrips(AddRemove, srcNm, prepCaList, spObjName) {
+	var aCast = CurrentSpells[spObjName];
+	if (!aCast) return;
+	if (AddRemove) {
+		aCast.preparedCantripsList = prepCaList;
+		if (!aCast.preparedCantripsListRemember) aCast.preparedCantripsListRemember = [];
+		aCast.preparedCantripsListRemember.push({
+			source: srcNm,
+			preparedCantripsList: prepCaList,
+		});
+		// enable the checkbox in the spell selection dialog
+		aCast.preparedCantrips = true;
+	} else if (aCast.preparedCantripsList && aCast.preparedCantripsListRemember) {
+		// Remove the entry
+		for (var i = aCast.preparedCantripsListRemember.length - 1; i >= 0; i--) {
+			var entry = aCast.preparedCantripsListRemember[i];
+			if (entry.source === srcNm) {
+				aCast.preparedCantripsListRemember.splice(i, 1);
+				break;
+			}
+		}
+		// Set the previously added option
+		if (aCast.preparedCantripsListRemember.length) {
+			aCast.preparedCantripsList = aCast.preparedCantripsListRemember[aCast.preparedCantripsListRemember.length - 1].preparedCantripsList;
+		} else {
+			// Delete the attributes if no entries are left to add
+			delete aCast.preparedCantrips;
+			delete aCast.preparedCantripsList;
+			delete aCast.preparedCantripsListRemember;
+		}
+	}
+}
+
 // Allow something to add a bonus spell to another spellcasting feature (e.g. magic item adds spells to spellbook of the wizard)
 /*
 var a = {spellcastingBonusElsewhere : {
@@ -1233,6 +1275,7 @@ async function processSpellcastingBonusElsewhere(bAddRemove, sType, sSrcNm, sUni
 			if (!bDoBonus && !bDoAddToKnown) break; // Stop the loop if both are false
 		}
 	}
+	SetStringifieds('spells');
 }
 
 // set the armour (if more AC than current armour) or remove the armour
@@ -1561,28 +1604,30 @@ function processExtraLimitedFeatures(AddRemove, srcNm, objArr) {
 }
 
 // add/remove a class feature text, replace the first line of it, or insert it after another
-// the string is assumed to start with "\u25C6" (ParseClassFeature | ParseClassFeatureExtra)
+// the string is assumed to start with "#" (ParseClassFeature | ParseClassFeatureExtra)
 // for possible values of 'act', see the switch statement
 // each ...TxtA is [firstline, completetext]
 function applyClassFeatureText(act, fldA, oldTxtA, newTxtA, prevTxt) {
 	if (!oldTxtA || !oldTxtA[0]) return false; // no oldTxt, so we can't do anything
 
 	// make some regex objects
-	var fReplaceLinebreaks = function(str) {
+	var getRx = function(str) {
 		var sEscaped = str.replace(/\n/g, '\r').replace(/^\r+/, '').RegEscape();
 		var sJustLine = RegExp(sEscaped + ".*", "i");
-		var sFullSection = RegExp("\\r?" + sEscaped + "(.|\\n\\s\\s|\\r\\w)*", "i"); // everything until the first line that doesn't start with two spaces or a letter/number (e.g. an empty line or a new bullet point)
-		return [sJustLine, sFullSection];
+		// Regex for everything until the first empty line or the first line that doesn't start with a "#" (the header format character)
+		var sFullSection = RegExp("\\r?" + sEscaped + ".*(\r[^\r#].*)*", "i"); 
+		return {
+			head: sJustLine,
+			full: sFullSection,
+		};
 	}
-	var oldFrstLnRx = fReplaceLinebreaks(oldTxtA[0]);
-	var oldRxHead = oldFrstLnRx[0];
-	var oldRx = oldFrstLnRx[1];
+	var oldRx = getRx(oldTxtA[0]);
 
 	// find the field we are supposed to update
 	var fld = fldA[0];
 	if (fldA.length > 1) {
 		for (var i = 0; i < fldA.length; i++) {
-			if (oldRx.test(What(fldA[i]))) {
+			if (oldRx.full.test(What(fldA[i]))) {
 				fld = fldA[i];
 				break;
 			}
@@ -1593,28 +1638,34 @@ function applyClassFeatureText(act, fldA, oldTxtA, newTxtA, prevTxt) {
 
 	// apply the change
 	switch (act) {
-		case "first" : // update just the first line (usages, recovery, or additional changed)
-			var changeTxt = fldTxt.replace(oldRxHead, newTxtA[0]);
+		case "first": // update just the first line (usages, recovery, or additional changed)
+			var changeTxt = fldTxt.replace(oldRx.head, newTxtA[0]);
 			break;
-		case "replace" : // replace the oldTxt with the newTxt
-			var changeTxt = fldTxt.replace(oldRx, newTxtA[1]);
+		case "replace": // replace the oldTxt with the newTxt
+			var changeTxt = fldTxt.replace(oldRx.full, newTxtA[1]);
 			break;
-		case "insert" : // add the newTxt after the prevTxt
+		case "insert": // add the newTxt after the prevTxt
 			if (!prevTxt) return false; // no prevTxt, so we can't do anything
-			var prevFrstLnRx = fReplaceLinebreaks(prevTxt);
-			var prevTxtFound = fldTxt.match(prevFrstLnRx[1]);
+			var prevRx = getRx(prevTxt);
+			var prevTxtFound = fldTxt.match(prevRx.full);
 			var changeTxt = prevTxtFound ? fldTxt.replace(prevTxtFound[0], prevTxtFound[0] + newTxtA[1]) : fldTxt;
 			break;
-		case "remove" : // remove the oldTxt
-			var changeTxt = fldTxt.replace(oldRx, '').replace(/^\r+/, '');
+		case "insertbefore": // add the newTxt before the prevTxt
+			if (!prevTxt) return false; // no prevTxt, so we can't do anything
+			var prevRx = getRx(prevTxt);
+			var prevTxtFound = fldTxt.match(prevRx.full);
+			var changeTxt = prevTxtFound ? fldTxt.replace(prevTxtFound[0], newTxtA[1] + prevTxtFound[0] ) : fldTxt;
 			break;
-		default :
+		case "remove": // remove the oldTxt
+			var changeTxt = fldTxt.replace(oldRx.full, '').replace(/^\r+/, '');
+			break;
+		default:
 			return false;
 	}
 	if (changeTxt != fldTxt) {
 		Value(fld, changeTxt);
 		return true;
-	} else if (act !== "insert" && act !== "remove") {
+	} else if (!/^(insert(before)?|remove)$/i.test(act)) {
 		// nothing changed, so just insert the whole feature, using this same function
 		applyClassFeatureText("insert", fldA, oldTxtA, newTxtA, prevTxt);
 	} else {
@@ -2357,7 +2408,7 @@ async function ShowCompareDialog(txtA, arr, canBeLong) {
 		} else {
 			nextElem.elements[0].type = "static_text";
 			nextElem.elements[0].wrap_name = true;
-			nextElem.elements[0].name = arr[i][1].replace(/^(\r|\n)*/, "");
+			nextElem.elements[0].name = arr[i][1].replace(/^[\r\n]*/, "");
 		}
 		clusterArr.push(nextElem);
 	}
@@ -2372,7 +2423,7 @@ async function ShowCompareDialog(txtA, arr, canBeLong) {
 			if (!canBeLong) return;
 			var toLoad = {};
 			for (var i = 0; i < arr.length; i++) {
-				toLoad["tx" + ("0" + i).slice(-2)] = arr[i][1].replace(/^(\r|\n)*/, "");
+				toLoad["tx" + ("0" + i).slice(-2)] = arr[i][1].replace(/^[\r\n]*/, "");
 			}
 			dialog.load(toLoad);
 		},
@@ -2514,8 +2565,7 @@ function ParseMagicItem(input, bForInventory) {
 				var sObj = kObj[keySub];
 				// Continue if choice doesn't exist or source is excluded
 				if (!sObj) {
-					console.println("The subchoice '" + kObj.choices[i] + "' for the magic item '" + kObj.name + "' doesn't have a corresponding object entry. Please contact its author to have this issue corrected. The choice will be ignored for now.");
-					console.show();
+					displayError(false, 'The subchoice "' + kObj.choices[i] + '" for the magic item "' + kObj.name + "\" doesn't have a corresponding object entry. Please contact its author to have this issue corrected. The choice will be ignored for now.");
 					// Remove this array entry, but make sure we don't skip an entry
 					kObj.choices.splice(i, 1);
 					i--;
@@ -2623,10 +2673,7 @@ async function ApplyMagicItem(input, FldNmbr, field) {
 				try {
 					selectMIvar = aMI.selfChoosing();
 				} catch (error) {
-					var eText = "The function in the 'selfChoosing' attribute of '" + newMI + "' produced an error! Please contact the author of the magic item code to correct this issue:\n " + error;
-					for (var e in error) eText += "\n " + e + ": " + error[e];
-					console.println(eText);
-					console.show();
+					displayError(error, 'The "selfChoosing" attribute for the magic item "' + aMI.name + '" produces the error below and is subsequently ignored.\nIf this is one of the built-in magic items, please share this error message with MorePurpleMoreBetter using one of the contact bookmarks, so he can fix this bug. Please attach this error message and list the version number of the sheet, name and version of the software you are using, and the name of the buggy magic item.\nIf this is not a built-in magic item, please share this error message with its author.');
 				}
 				selectMIvar = selectMIvar && typeof selectMIvar == "string" && aMI[selectMIvar.toLowerCase()] ? selectMIvar : false;
 			}
@@ -2655,8 +2702,7 @@ async function ApplyMagicItem(input, FldNmbr, field) {
 	if (failedChoice) {
 		Value(MIflds[2], 'ERROR, please reapply "' + aMI.name + '" above.');
 		if (!IsNotImport) {
-			console.println("The magic item '" + aMI.name + "' requires you to make a selection of a sub-choice. However, because this item was added during importing from another MPMB's Character Record Sheet, no pop-up dialog could be displayed to allow you to make a selection. Please reapply this magic item to show the pop-up dialog and make a selection for its sub-choice.");
-			console.show();
+			displayError(false, 'The magic item "' + aMI.name + "\" requires you to make a selection of a sub-choice. However, because this item was added during importing from another MPMB's Character Record Sheet, no pop-up dialog could be displayed to allow you to make a selection. Please reapply this magic item to show the pop-up dialog and make a selection for its sub-choice.");
 		}
 		if (thermoTxt) thermoM(thermoTxt, true); // Stop progress bar
 		field.setVal = "ERROR, please reapply: " + (aMI.name.substr(0,2) + "\u200A" + aMI.name.substr(2)).split(" ").join("\u200A ");
@@ -2728,10 +2774,7 @@ async function ApplyMagicItem(input, FldNmbr, field) {
 				var meetsPrereq = theMI.prereqeval(gatherVars);
 			}
 		} catch (error) {
-			var eText = "The 'prereqeval' attribute for the magic item '" + theMI.name + "' produces an error and is subsequently ignored. If this is one of the built-in magic items, please contact morepurplemorebetter using one of the contact bookmarks to let him know about this bug. Please do not forget to list the version number of the sheet, name and version of the software you are using, and the name of the magic item.\nThe sheet reports the error as\n " + error;
-			for (var e in error) eText += "\n " + e + ": " + error[e];
-			console.println(eText);
-			console.show();
+			displayError(error, 'The "prereqeval" attribute for the magic item "' + theMI.name + '" produces the error below and is subsequently ignored.\nIf this is one of the built-in magic items, please share this error message with MorePurpleMoreBetter using one of the contact bookmarks, so he can fix this bug. Please attach this error message and list the version number of the sheet, name and version of the software you are using, and the name of the buggy magic item.\nIf this is not a built-in magic item, please share this error message with its author.');
 			var meetsPrereq = true;
 		};
 		if (!meetsPrereq) {
@@ -2804,7 +2847,7 @@ async function ApplyMagicItem(input, FldNmbr, field) {
 		// Create the tooltip
 		var tooltipStr = (theMI.type ? theMI.type + ", " : "") + (theMI.rarity ? theMI.rarity : "");
 		if (theMI.attunement) tooltipStr += tooltipStr ? " (requires attunement)" : "requires attunement";
-		tooltipStr = toUni(theMI.name) + (tooltipStr ? "\n" + tooltipStr[0].toUpperCase() + tooltipStr.substr(1) : "");
+		tooltipStr = toUni(theMI.name, "bold") + (tooltipStr ? "\n" + tooltipStr[0].toUpperCase() + tooltipStr.substr(1) : "");
 
 		if (theMI.notLegalAL) {
 			tooltipStr += "\n \u2022 Illegal in Adventurers League play";
@@ -2835,7 +2878,7 @@ async function ApplyMagicItem(input, FldNmbr, field) {
 		if (theMI.prerequisite) tooltipStr += "\n \u2022 Prerequisite: " + theMI.prerequisite;
 		tooltipStr += stringSource(theMI, "full,page", "\n \u2022 Source: ", ".");
 
-		if (theMI.descriptionFull) tooltipStr += isArray(theMI.descriptionFull) ? desc(theMI.descriptionFull).replace(/^\n   /i, "\n\n") : "\n\n" + theMI.descriptionFull;
+		if (theMI.descriptionFull) tooltipStr += "\n\n" + formatDescriptionFull(theMI.descriptionFull);
 
 		// Get the description
 		var theDesc = "";
@@ -3089,10 +3132,12 @@ function ParseMagicItemMenu() {
 			firstLetter = itemName[0].toUpperCase();
 		}
 		iMenus.ref[itemName] = subItem ? mainItem + "#" + subItem : mainItem;
+		// Add the entry for the alphabetical
 		if (!iMenus.alphabetical[firstLetter]) iMenus.alphabetical[firstLetter] = [];
 		iMenus.alphabetical[firstLetter].push(itemName);
-		if (tObj.source) {
-			var aSrcs = parseSource(tObj.source);
+		// Add to its source listing
+		var aSrcs = parseSource(tObj.source);
+		if (aSrcs) {
 			for (var a = 0; a < aSrcs.length; a++) {
 				var aSrc = SourceList[aSrcs[a][0]];
 				var uSrc = aSrc.name + " (" + aSrc.abbreviation + ")";
@@ -3133,7 +3178,7 @@ function ParseMagicItemMenu() {
 				iMenus.special["Spellcasting improvement"].push(itemName);
 			}
 		}
-		if (tObj.speed || (/(flying|climbing|burrowing|swimming|walking) speed/i).test(tObj.descriptionFull) || (/of (flying|climbing|burrowing|swimming)/i).test(tObj.name)) {
+		if (tObj.speed || /(flying|climbing|burrowing|swimming|walking) speed/i.test(tObj.descriptionFull) || /of (flying|climbing|burrowing|swimming)/i.test(tObj.name)) {
 			iMenus.special.Movement.push(itemName);
 		}
 		if (tObj.dmgres || (tObj.savetxt && tObj.savetxt.immune)) {
@@ -3788,8 +3833,7 @@ async function selectMagicItemGearType(AddRemove, FldNmbr, typeObj, oldChoice, c
 		if (typeNm != "armor") itemChoices.sort();
 		if (!IsNotImport) {
 			userSelected = itemChoices[0];
-			console.println("During importing from another MPMB's Character Record Sheet, the sheet was unable to show a pop-up dialog to let you choose what type of " + typeNm + " the '" + curName + "' is. As a result, '" + userSelected + "' was chosen for you automatically. If you wish to change this, reapply the '" + curName + "'.");
-			console.show();
+			displayError(false, "During importing from another MPMB's Character Record Sheet, the sheet was unable to show a pop-up dialog to let you choose what type of " + typeNm + ' the "' + curName + '" is. As a result, "' + userSelected + '" was chosen for you automatically. If you wish to change this, reapply the "' + curName + '".');
 		} else {
 			var userSelected = await AskUserOptions("Select Type of " + typeNmC, "Choose which " + typeNm + " type this '" + curName + "' is.\nIf you want to change the " + typeNm + " type at a later time, select the magic item again from the drop-down box." + (aMI.choices ? "\nYou will also be prompted to select the " + typeNm + " type again when you select a choice using the button in this magic item line," + (aMIvar ? " even when selecting '" + aMIvar.name + "' again." : ".") : ""), itemChoices, "radio", true);
 		}

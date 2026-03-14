@@ -299,7 +299,6 @@ var Base_ClassList = {
 			"\n \u2022 Leather armor and a dagger." +
 			"\n\nAlternatively, choose 5d4 \xD7 10 gp worth of starting equipment instead of both the class' and the background's starting equipment.",
 		subclasses : ["Bard College", ["bard-college of lore"]],
-		attacks : [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 		spellcastingFactor : 1,
 		spellcastingKnown : {
 			cantrips : [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
@@ -456,7 +455,6 @@ var Base_ClassList = {
 			"\n \u2022 A shield and a holy symbol." +
 			"\n\nAlternatively, choose 5d4 \xD7 10 gp worth of starting equipment instead of both the class' and the background's starting equipment.",
 		subclasses : ["Divine Domain", ["cleric-life domain"]],
-		attacks : [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 		spellcastingFactor : 1,
 		spellcastingKnown : {
 			cantrips : [3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
@@ -555,7 +553,6 @@ var Base_ClassList = {
 			"\n \u2022 Leather armor, an explorer's pack, and a druidic focus." +
 			"\n\nAlternatively, choose 2d4 \xD7 10 gp worth of starting equipment instead of both the class' and the background's starting equipment.",
 		subclasses : ["Druid Circle", ["druid-circle of the land"]],
-		attacks : [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 		spellcastingFactor : 1,
 		spellcastingKnown : {
 			cantrips : [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
@@ -933,8 +930,8 @@ var Base_ClassList = {
 				name : "Evasion",
 				source : [["SRD", 28], ["P", 79]],
 				minlevel : 7,
-				description : desc("My Dexterity saves vs. areas of effect negate damage on success and halve it on failure"),
-				savetxt : { text : ["Dex save vs. area effects: fail \u2015 half dmg, success \u2015 no dmg"] }
+				description : desc("If I make a Dex save to halve damage, I instead take none if I succeed and half if I fail."),
+				savetxt: { text: ["**Dex save for half dmg**. *Failure:* half dmg, *Success:* no dmg"] },
 			},
 			"stillness of mind" : {
 				name : "Stillness of Mind",
@@ -1444,7 +1441,7 @@ var Base_ClassList = {
 		regExpSearch : /(rogue|miscreant)/i,
 		name : "Rogue",
 		source : [["SRD", 39], ["P", 94]],
-		primaryAbility : "Rogue: Dexterity",
+		primaryAbility : "Dexterity",
 		prereqs : "Dexterity 13",
 		improvements : [0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 4, 4, 4, 4, 5, 5, 5, 6, 6],
 		die : 8,
@@ -1471,7 +1468,6 @@ var Base_ClassList = {
 			"\n \u2022 Leather armor, two daggers, and thieves' tools." +
 			"\n\nAlternatively, choose 4d4 \xD7 10 gp worth of starting equipment instead of both the class' and the background's starting equipment.",
 		subclasses : ["Roguish Archetype", ["rogue-thief"]],
-		attacks : [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 		features : {
 			"expertise" : function() {
 				var a = {
@@ -1578,8 +1574,8 @@ var Base_ClassList = {
 				name : "Evasion",
 				source : [["SRD", 40], ["P", 96]],
 				minlevel : 7,
-				description : desc("My Dexterity saves vs. areas of effect negate damage on success and halve it on failure"),
-				savetxt : { text : ["Dex save vs. area effects: fail \u2015 half dmg, success \u2015 no dmg"] }
+				description : desc("If I make a Dex save to halve damage, I instead take none if I succeed and half if I fail."),
+				savetxt: { text: ["**Dex save for half dmg**. *Failure:* half dmg, *Success:* no dmg"] },
 			},
 			"reliable talent" : {
 				name : "Reliable Talent",
@@ -1641,7 +1637,6 @@ var Base_ClassList = {
 			"\n \u2022 Two daggers." +
 			"\n\nAlternatively, choose 3d4 \xD7 10 gp worth of starting equipment instead of both the class' and the background's starting equipment.",
 		subclasses : ["Sorcerous Origin", ["sorcerer-draconic bloodline"]],
-		attacks : [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 		spellcastingFactor : 1,
 		spellcastingKnown : {
 			cantrips : [4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],
@@ -1786,7 +1781,6 @@ var Base_ClassList = {
 			"\n \u2022 Leather armor, any simple weapon, and two daggers." +
 			"\n\nAlternatively, choose 4d4 \xD7 10 gp worth of starting equipment instead of both the class' and the background's starting equipment.",
 		subclasses : ["Otherworldly Patron", ["warlock-the fiend"]],
-		attacks : [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 		spellcastingFactor : "warlock1",
 		spellcastingKnown : {
 			cantrips : [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
@@ -1969,8 +1963,8 @@ var Base_ClassList = {
 					calcChanges : {
 						spellAdd : [
 							function (spellKey, spellObj, spName) {
-								if (spName == "book of ancient secrets") {
-									spellObj.firstCol = "(R)";
+								if (spName == "warlock-book of ancient secrets") {
+									spellObj.firstCol = SpellRitualTag;
 									if (!(/.*(\d+ ?h\b|special|see b).*/i).test(spellObj.time)) {
 										var numMinutes = Number(spellObj.time.replace(/(\d+) ?min.*/, "$1"));
 										if (isNaN(numMinutes)) numMinutes = 0;
@@ -1999,7 +1993,7 @@ var Base_ClassList = {
 					}],
 					prereqeval : function(v) { return wasm_character.get_class_level('warlock') >= 15 && GetFeatureChoice('class', 'warlock', 'pact boon') == 'pact of the chain'; },
 					spellChanges : {
-						"speak with animals" : {
+						"hold monster" : {
 							components : "V,S",
 							compMaterial : "",
 							description : "1 celestial, fiend, or elemental, save or paralyzed; extra save at end of each turn",
@@ -2095,7 +2089,8 @@ var Base_ClassList = {
 						"As an action, I can touch a willing creature and perceive through its senses (not my own)",
 						"This lasts until the end of my next turn, but I can use an action to extend the duration"
 					]),
-					source : [["SRD", 49], ["P", 111]]
+					source : [["SRD", 49], ["P", 111]],
+					action: [["bonus action", ""]],
 				},
 				"lifedrinker (prereq: level 12 warlock, pact of the blade)" : {
 					name : "Lifedrinker",
@@ -2395,7 +2390,7 @@ var Base_ClassList = {
 						name : "Pact of the Chain",
 						spells : ["find familiar"],
 						selection : ["find familiar"],
-						firstCol : "(R)"
+						firstCol : '\xAE'
 					}]
 				},
 				"pact of the tome" : {
@@ -2483,7 +2478,6 @@ var Base_ClassList = {
 			"\n \u2022 A spellbook." +
 			"\n\nAlternatively, choose 4d4 \xD7 10 gp worth of starting equipment instead of both the class' and the background's starting equipment.",
 		subclasses : ["Arcane Tradition", ["wizard-evocation"]],
-		attacks : [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 		spellcastingFactor : 1,
 		spellcastingKnown : {
 			cantrips : [3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
@@ -2569,7 +2563,7 @@ var Base_ClassSubList = {
 				source : [["SRD", 10], ["P", 49]],
 				minlevel : 6,
 				description : desc("While raging, I can't be charmed or frightened, and such effects are suspended"),
-				savetxt : { text : ["Immune to being charmed/frightened in rage"] }
+				savetxt: { immune: ["Charmed (in rage)", "Frightened (in rage)"] },
 			},
 			"subclassfeature10" : {
 				name : "Intimidating Presence",
@@ -2666,7 +2660,7 @@ var Base_ClassSubList = {
 								case "life transference" :
 								case "vampiric touch" :
 									var useSpellDescr = getSpellShortDescription(spellKey, spellObj);
-									var strAdd = " +" + (spellObj.level + 2) + "+1/SL";
+									var strAdd = " +" + (spellObj.level + 2) + (spellObj.allowUpCasting === false ? "": "+1/SL");
 									spellObj.description = useSpellDescr.replace(/(heals? (half|twice)( the damage dealt| that)?)( in HP)?/, "$1" + strAdd);
 									return true;
 								case "mass heal" :
@@ -2674,7 +2668,7 @@ var Base_ClassSubList = {
 									return true;
 								default :
 									if (!genericSpellDmgEdit(spellKey, spellObj, "heal", (2 + spellObj.level))) return;
-									if (spellObj.level < 9) genericSpellDmgEdit(spellKey, spellObj, "heal", "1/SL");
+									if (spellObj.level < 9 && spellObj.allowUpCasting !== false) genericSpellDmgEdit(spellKey, spellObj, "heal", "1/SL");
 									spellObj.discipleOfLife = true; // for Blessed Healer and Supreme Healing
 									return true;
 							}
@@ -2727,7 +2721,7 @@ var Base_ClassSubList = {
 								};
 								var alwaysOthers = ["life transference", "raise dead", "revivify", "resurrection", "true resurrection"];
 								var strPart = alwaysOthers.indexOf(spellKey) === -1 ? "; if other, I heal " : "; I heal ";
-								var strAdd = spellObj.level < 9 ? strPart + (spellObj.level + 2) + (spellObj.noSpellUpcasting ? "" : "+1/SL") + " HP" : strPart + "11 HP";
+								var strAdd = spellObj.level < 9 ? strPart + (spellObj.level + 2) + (spellObj.allowUpCasting === false ? "" : "+1/SL") + " HP" : strPart + "11 HP";
 								spellObj.description = useSpellDescr + strAdd;
 								return true;
 							}
@@ -3156,8 +3150,8 @@ var Base_ClassSubList = {
 				choices : ["Evasion", "Stand Against the Tide", "Uncanny Dodge"],
 				"evasion" : {
 					name : "Evasion",
-					description : desc("My Dexterity saves vs. areas of effect negate damage on success and halve it on failure"),
-					savetxt : { text : ["Dex save vs. area effects: fail \u2015 half dmg, success \u2015 no dmg"] }
+					description : desc("If I make a Dex save to halve damage, I instead take none if I succeed and half if I fail."),
+					savetxt: { text: ["**Dex save for half dmg**. *Failure:* half dmg, *Success:* no dmg"] },
 				},
 				"stand against the tide" : {
 					name : "Stand Against the Tide",

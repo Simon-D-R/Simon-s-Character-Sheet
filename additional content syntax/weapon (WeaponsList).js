@@ -41,7 +41,7 @@
 				Note that if you want a class feature, race, racial trait, feat, background, or magic item to
 				add a weapon/attack, you should be using the 'weaponOptions' attribute.
 
-	Sheet:		v13.2.0 and newer
+	Sheet:		v14.0.5 and above
 */
 
 var iFileName = "Homebrew Syntax - WeaponsList.js";
@@ -58,19 +58,31 @@ var iFileName = "Homebrew Syntax - WeaponsList.js";
 	Only the first occurrence of this variable will be used.
 */
 
-RequiredSheetVersion("13.2.0");
+RequiredSheetVersion("14.0.5", "24.0.0");
 /*	RequiredSheetVersion // OPTIONAL //
 	TYPE:	function call with one variable, a string or number
-	USE:	the minimum version of the sheet required for the import script to work
+	USE:	the minimum and maximum versions of the sheet required for the add-on script to work
+	CHANGE: v14.0.5 (added second parameter: upper version limit)
 
-	If this script is imported into a sheet with an earlier version than given here, the player will be given a warning.
+	If this script is imported into a sheet with an lower or higher version than given here,
+	the player will be given a warning.
 
-	The variable you input can be a the full semantic version of the sheet as a string (e.g. "13.0.6" or "13.1.0-beta1+201209").
-	Alternatively, you can input a number, which the sheet will translate to a semantic version.
-	For example:
-		FUNCTION CALL						REQUIRED MINIMUM VERSION
-		`RequiredSheetVersion(13);`			13.0.0
-		`RequiredSheetVersion(13.1);`		13.1.0
+	This function takes two variables, but only the first is required:
+	1. The minimum required version number.
+	   The sheet's version needs to be the same number or higher.
+	   This first parameter is required.
+
+	2. The upper version number limit.
+	   The sheet's version needs to be a lower number.
+	   This second parameter is optional.
+
+	Each variable can be input as a string with the full semantic version (e.g. "14.0.5"
+	or "24.0.4-beta+25011209"), or a number that the sheet will translate to a semantic
+	version. See the examples below for how the sheet does this.
+
+	INPUT NUMBER	SEMANTIC VERSION
+		14  			14.0.0
+		24.1			24.1.0
 
 	You can find the full semantic version of the sheet at the bottom of every page,
 	or look at the "Get Latest Version" bookmark, which lists the version number,
@@ -519,11 +531,13 @@ WeaponsList["purple sword"] = {
 
 	Setting this to false is NOT the same as not including this attribute!
 */
+	useSpellMod : ["wizard", "cleric"],
 	useSpellMod : "wizard",
 /*	useSpellMod // OPTIONAL //
 	TYPE:	string
 	USE:	the object name of a spellcasting object that this attack will use the spell attack/DC from
 	ADDED:	v13.0.6
+	CHANGE:	v14.0.0 (can now be an array of strings)
 
 	If the attack you are adding used the spell attack (or DC) of a fixed spellcasting entity
 	(class, race, feat, or magic item), then you can use this attribute.
@@ -531,6 +545,10 @@ WeaponsList["purple sword"] = {
 	when a feature adds an attack option, or creature option with attacks linked to the original feature.
 	For example, if a magic item grants an attack that uses the `fixedDC` of that magic item,
 	or a class feature grants a companion option that uses the spell attack of the class.
+
+	If this is an array, the sheet will pick the ability that results in the highest value.
+	This works bests when the spell sheet has been generated, otherwise the sheet won't look
+	at bonuses other than the ability modifier (e.g. no bonus from `calcChanges.spellCalc`).
 
 	Make sure that the string is an object name for a spellcasting object.
 	Spellcasting objects are created when something has spells that are displayed on the spell sheet pages.

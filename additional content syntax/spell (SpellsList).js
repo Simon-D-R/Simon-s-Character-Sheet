@@ -38,7 +38,7 @@
 				If you want attack cantrips or spells to be added to the attack section,
 				use the syntax for adding a weapon (as well), see "weapon (WeaponsList).js".
 
-	Sheet:		v13.1.0 and newer
+	Sheet:		v14.0.5 and above
 
 */
 
@@ -56,19 +56,31 @@ var iFileName = "Homebrew Syntax - SpellsList.js";
 	Only the first occurrence of this variable will be used.
 */
 
-RequiredSheetVersion("13.0.6");
+RequiredSheetVersion("14.0.5", "24.0.0");
 /*	RequiredSheetVersion // OPTIONAL //
 	TYPE:	function call with one variable, a string or number
-	USE:	the minimum version of the sheet required for the import script to work
+	USE:	the minimum and maximum versions of the sheet required for the add-on script to work
+	CHANGE: v14.0.5 (added second parameter: upper version limit)
 
-	If this script is imported into a sheet with an earlier version than given here, the player will be given a warning.
+	If this script is imported into a sheet with an lower or higher version than given here,
+	the player will be given a warning.
 
-	The variable you input can be a the full semantic version of the sheet as a string (e.g. "13.0.6" or "13.1.0-beta1+201209").
-	Alternatively, you can input a number, which the sheet will translate to a semantic version.
-	For example:
-		FUNCTION CALL						REQUIRED MINIMUM VERSION
-		`RequiredSheetVersion(13);`			13.0.0
-		`RequiredSheetVersion(13.1);`		13.1.0
+	This function takes two variables, but only the first is required:
+	1. The minimum required version number.
+	   The sheet's version needs to be the same number or higher.
+	   This first parameter is required.
+
+	2. The upper version number limit.
+	   The sheet's version needs to be a lower number.
+	   This second parameter is optional.
+
+	Each variable can be input as a string with the full semantic version (e.g. "14.0.5"
+	or "24.0.4-beta+25011209"), or a number that the sheet will translate to a semantic
+	version. See the examples below for how the sheet does this.
+
+	INPUT NUMBER	SEMANTIC VERSION
+		14  			14.0.0
+		24.1			24.1.0
 
 	You can find the full semantic version of the sheet at the bottom of every page,
 	or look at the "Get Latest Version" bookmark, which lists the version number,
@@ -423,20 +435,77 @@ SpellsList["sindering purple"] = {
 	is checked (see 'descriptionCantripDie' explanation above),
 	regardless of the unit system being set to metric.
 */
-	descriptionFull : "This spell repairs a single break or tear in an object you touch, such as broken chain link, two halves of a broken key, a torn clack, or a leaking wineskin. As long as the break or tear is no larger than 1 foot in any dimension, you mend it, leaving no trace of the former damage." + "\n   " + "This spell can physically repair a magic item or construct, but the spell can't restore magic to such an object.",
+	descriptionFull: "This spell repairs a single break or tear in an object you touch, such as broken chain link, two halves of a broken key, a torn clack, or a leaking wineskin. As long as the break or tear is no larger than 1 foot in any dimension, you mend it, leaving no trace of the former damage." + "\n   " + "This spell can physically repair a magic item or construct, but the spell can't restore magic to such an object.",
+	descriptionFull: [
+		"Introduction text of the spell. This line will not be preceded by a line break or three spaces as this is the first line.",
+		"Second entry, which will be preceded by a line break and three spaces.",
+		" \u2022 Bullet point entry. This will be preceded by a line break, but not with three spaces, as this entry starts with a space.",
+		" \u2022 Another bullet point entry.",
+		[ // This will render as a table (i.e. a tab between each column)
+			["Column 1 header", "Column 2 header", "Column 3 header"], // The first row, which will be made bold and italic
+			["Column 1 entry", "Column 2 entry", "Column 3 entry"], // The rest of the rows won't be changed
+			["Column 1 entry II", "Column 2 entry II", "Column 3 entry II"], // Table row 2
+		],
+		">>Header Paragraph<<. This paragraph will be preceded by a line break and three spaces. The text 'Header Paragraph' will be rendered with unicode as being bold and italic.",
+	],
 /*	descriptionFull // OPTIONAL //
-	TYPE:	string
+	TYPE:	array or string
 	USE:	description of the spell as it appears in its source
+	CHANGE: v14.0.0 (array option & formatting characters)
 
 	This text is used to populate the tooltip of the spell so that the original description can be read.
 	This description will also be available in a pop-up by using the button in the spell's line.
 	There is no limit to how big this description can be,
 	but very long descriptions will not always display correctly.
+
+	From v14.0.0 onwards, this attribute can be an array. Each entry in the array will be put
+	on a new line. Each entry can be one of the following:
+		1. String.
+		   If the entry is a string that doesn't start with a space character and
+		   it is not the first entry, it will be added on a new line,
+		   proceeded by three spaces (i.e. `\n   `).
+		   If the entry is a string that starts with a space character, it will be added
+		   on a new line, but without any preceding spaces.
+		   For example, to make a bullet point list, you would use ` \u2022 list entry`
+		   (N.B. `\u2022` is unicode for a bullet point).
+		2. Array of arrays, which contain only strings
+		   If the entry is in itself an array, it is treated as a table.
+		   Each entry in that array is a row in the table, with the first row being the headers.
+		   The headers will be made bold and italic. This is done with unicode. If unicode is
+		   disabled, the sheet will capitalize this instead.
+		   Each subarray is rendered with a tab between each column (i.e. `Array.join("\t")`).
+		   If instead of a subarray there is a string, it will be added as is.
+		   The table will be preceded by two line breaks and followed by one line break.
+
+	FORMATTING CHARACTERS (since v14.0.0)
+	Regardless if you use a string or an array, the `descriptionFull` can be formatted
+	using the Rich Text formatting characters. Text between these formatting characters
+	will be displayed differently. The formatting characters are as follows:
+		*text*   = italic
+		**text** = bold
+		_text_   = underlined [doesn't work in tooltips/pop-ups]
+		~text~   = strikethrough [doesn't work in tooltips/pop-ups]
+		#text#   = Header 1:
+		           - bold and theme color (Colourful)
+		           - bold and 15% size increase (Printer Friendly)
+		##text## = Header 2:
+		           - italic, bold, and theme color (Colourful)
+		           - italic and bold (Printer Friendly)
+
+	The `descriptionFull` of spells is only used to populate the tooltip and pop-up dialogs,
+	which don't support formatting except through unicode.
+	This means that only the bold and italic formatting will have any effect.
+	Other formatting characters will be ignored (e.g. no underlining or strikethrough).
+	If unicode is disabled, the sheet will instead capitalize everything between formatting characters.
 */
 	ritual : true,
 /*	ritual // OPTIONAL //
 	TYPE:	boolean
 	USE:	whether this spell can be cast as a ritual
+	CHANGE: v14.0.1 (now adds registered trademark symbol instead of "(R)")
+
+	Spells with the ritual tag will gain a "®" (registered trademark symbol)
+	after their name on the spell sheet.
 
 	Setting this attribute to false is the same as not including this attribute.
 */
@@ -451,6 +520,7 @@ SpellsList["sindering purple"] = {
 /*	firstCol // OPTIONAL //
 	TYPE:	string
 	USE:	force the first column of the spell line to be set to this
+	CHANGE:	v14.0.1 (onceXr+markedbox options)
 
 	Be aware that the first column has very limited space and everything over 2 characters long will be invisible.
 	1 character enclosed in brackets will be short enough to be visible, e.g. "(R)".
@@ -461,12 +531,14 @@ SpellsList["sindering purple"] = {
 	This can be useful to indicate something like Power Point or Ki cost.
 
 	You can also use this attribute to call one of the special things the first column can be:
-		"atwill"		// the "At Will" graphic
-		"oncesr"		// the "1× SR" graphic
-		"oncelr"		// the "1× LR" graphic
-		"checkbox"		// an empty checkbox
-		"checkedbox"	// a checked checkbox
-		"markedbox"		// a checkbox checked with a star, indicating this spell is always prepared
+		"checkbox"			// an empty checkbox
+		"checkedbox"		// a checked checkbox
+		"markedbox"			// a checkbox with a star inside, indicating that this spell is always prepared
+		"atwill"			// the 'At will' graphic
+		"oncesr"			// a checkbox with 'SR' inside (once per short rest usage)
+		"oncelr"			// a checkbox with 'LR' inside (once per short long usage)
+		"oncesr+markedbox"	// two checkboxes, one with 'SR' inside and one with a star inside
+		"oncelr+markedbox"	// two checkboxes, one with 'LR' inside and one with a star inside
 
 	Setting this attribute to an empty string ("") is the same as not including this attribute.
 */
@@ -493,15 +565,17 @@ SpellsList["sindering purple"] = {
 	ADDED:	v13.0.7
 
 	IMPORTANT
-	This attribute is only useful as part of a `spellChanges` object (see "_common attributes.js").
-	It is ignored if part of a SpellsList object, because you can just not include upcasting in
-	the description.
+	This attribute is only useful as part of a `spellChanges` object or when used in a
+	`calcChanges.spellAdd` function (see "_common attributes.js").
+	It is ignored if part of a SpellsList object, because you can just not include
+	upcasting in the description.
 
-	By setting this attribute to false, you force the sheet to remove the upcasting from the spell's 
-	description.
-	Normally, the sheet will limit spells gained from a feat, magic item, or race to be cast only at
-	its lowest level, removing any upcasting options from the short spell description.
-	Use this attribute with the `spellChanges` attribute, if a class feature doesn't allow upcasting.
+	By setting this attribute to false, you force the sheet to remove the upcasting from
+	the spell's  description.
+	Normally, the sheet will limit spells gained from a feat, magic item, or race to be cast
+	only at its lowest level, removing any upcasting options from the short spell description.
+	Use this attribute with the `spellChanges` attribute, if a class feature
+	doesn't allow upcasting (see "_common attributes.js").
 */
 
 

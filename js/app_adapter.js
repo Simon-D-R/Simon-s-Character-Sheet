@@ -278,7 +278,7 @@ AdapterParsePopUpMenu = function (aParams, resolve) {
 
 
 this.info = {
-	SheetVersion: "v13.3.0",
+	SheetVersion: "v14.0.5",
 	SpellsOnly: false,
 };
 this.path = "./index.html";
@@ -1071,6 +1071,17 @@ class AdapterClassFieldReference {
 				theElementAdapter.value = theReturnValue.replace("&apos;", "'");
 			})
 		}
+		// run the effect now to set the field, but with a delay because when adding magic items the description is set to empty after this for some reason
+		setTimeout(
+			() => {
+				let theElement = document.getElementById(currentFieldId);
+				let theElementAdapter = new AdapterClassFieldReference([theElement]);
+				let theReturnValue = theElementAdapter.value;
+				eval(actionStr.replace("event.target", "theElementAdapter").replace("event.value", "theReturnValue").replace("isn't", "isn&apos;t"));
+				theElementAdapter.value = theReturnValue.replace("&apos;", "'");
+			},
+			20
+		);
 	}
 
 	setFocus() {
@@ -1784,6 +1795,12 @@ function adapter_helper_get_saveimg_field(img_name /*String*/) /*AdapterClassIma
 		return new AdapterClassImageReference('');
 	} else if (img_name.startsWith('Spells.')) {
 		return new AdapterClassImageReference('img/page_spells/checks/' + img_name.toLowerCase().match(/\.([a-z0-9]+)$/)[1] + '.svg');
+	} else if (img_name.startsWith('FirstCol.')) {
+		let file_name = img_name.split(".")[1];
+		if (file_name == "hide") {
+			return null;
+		}
+		return new AdapterClassImageReference('img/page_spells/checks/' + file_name + '.svg');
 	}
 	throw "unknown SaveIMG type: " + String(img_name);
 }
