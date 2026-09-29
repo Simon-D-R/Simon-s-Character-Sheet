@@ -3155,11 +3155,13 @@ function AddFeature(identifier, usages, additionaltxt, recovery, tooltip, Update
 					usageFld.setAction("Calculate", calculation);
 					usageFld.submitName = calculation; //so it can be referenced later
 					recoveryFld.value = recovery;
+					console.log("3158:", usages, UpdateOrReplace, usageFld.value);
 					if (!isNaN(usageFld.value) && !isNaN(UpdateOrReplace) && !isNaN(usages)) {
-						usageFld.value += usages - Number(UpdateOrReplace);
+						usageFld.value = Number(usageFld.value) + Number(usages) - Number(UpdateOrReplace);
 					} else {
-						usageFld.value = usages;
+						usageFld.value = Number(usages);
 					}
+					console.log("3164:", usageFld.value);
 				} else if ((featureFld.value.toLowerCase().indexOf(additionaltxt.toLowerCase()) !== -1 || UpdateOrReplace === "bonus") && !isNaN(usages)) {
 					if (tooltip && featureFld.userName.indexOf(tooltip) === -1) featureFld.userName += ", " + tooltip;
 					usageFld.value += usages - (!isNaN(UpdateOrReplace) ? Number(UpdateOrReplace) : 0);

@@ -1,5 +1,5 @@
 this.info = {
-	version: "v0.4.1",
+	version: "v0.4.3",
 	SheetVersion: "v14.0.8",
 	SpellsOnly: false,
 };

@@ -86,7 +86,7 @@ function setSheetVersion() {
 }
 
 async function fetchFixedAdditionalScripts() {
-	for (let item of []) {
+	for (let item of [["Almara_0.4.js", "Almara"], ["WotC.js", "WotC"]]) {
 		let fileName = item[0];
 		let scriptName = item[1];
 		console.log("adding additional scripts from", scriptName);

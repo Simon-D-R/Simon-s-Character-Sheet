@@ -81,7 +81,7 @@ This is not necessary when you've downloaded a pre-built binary from the [releas
 	```
 	and wasm-bindgen-cli with
 	```sh
-	cargo install wasm-bindgen-cli@0.2.108
+	cargo install wasm-bindgen-cli@0.2.126
 	```
 3) Build the WASM folder with the included `build_release.sh`. Alternatively, run wasm-pack directly with
 	```sh
