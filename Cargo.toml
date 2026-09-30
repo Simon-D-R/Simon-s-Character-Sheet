@@ -1,6 +1,6 @@
 [package]
 name = "simons_dnd_character_sheet"
-version = "0.4.1"
+version = "0.4.3"
 authors = ["Simon"]
 edition = "2024"
 
@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 default = ["console_error_panic_hook"]
 
 [dependencies]
-wasm-bindgen = "=0.2.108"
+wasm-bindgen = "=0.2.126"
 wasm-bindgen-futures = "0.4.58"
 leptos = { version = "=0.8.15", features = ["csr"] }
 any_spawner = "0.3.0"
@@ -46,7 +46,7 @@ features = [
 ]
 
 [dev-dependencies]
-wasm-bindgen-cli = "=0.2.108"  # version should match in this file (wasm-bindgen above), README.md and workflows
+wasm-bindgen-cli = "=0.2.126"  # version should match in this file (wasm-bindgen above), README.md and workflows
 wasm-bindgen-test = "0.3.58"
 
 [build-dependencies]

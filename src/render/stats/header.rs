@@ -765,7 +765,7 @@ pub fn show_class_selection_modal(
 										.child(
 											class_list
 											.iter()
-											.map(|(class_id, class_name)| {leptos::html::option().value(class_id.clone()).child(class_name.clone())})
+											.map(|(class_id, class_name)| {let class_id_clone = class_id.clone();leptos::html::option().value(class_id.clone()).child(class_name.clone()).selected(move || {class_clone.read().eq(&class_id_clone)})})
 											.collect_view()
 										)
 										.on(leptos::ev::change, move |event| {let new_val = leptos::prelude::event_target_value(&event);class_clone.set(new_val.clone());subclass_clone.set(String::new());if !new_val.is_empty() && (level_clone.get_untracked() == 0) {level_clone.set(1)}})
@@ -790,7 +790,7 @@ pub fn show_class_selection_modal(
 										}
 									}
 									leptos::html::select().class("inputfield-regular").style("min-width:3em;width:-webkit-fill-available;width:-moz-available;width:stretch").child(
-										subclasses_list.iter().map(|(subclass_id, subclass_name)| {leptos::html::option().value(subclass_id.clone()).child(subclass_name.clone())}).collect_view()
+										subclasses_list.iter().map(|(subclass_id, subclass_name)| {let subclass_id_clone  = subclass_id.clone();leptos::html::option().value(subclass_id.clone()).child(subclass_name.clone()).selected(move || {subclass_clone.read().eq(&subclass_id_clone)})}).collect_view()
 									).on(leptos::ev::change, move |event| {subclass_clone.set(leptos::prelude::event_target_value(&event))})
 								}
 							),
